@@ -37,23 +37,26 @@ async fn main() {
 }
 
 async fn handle(request: Request<Body>) -> Result<Response<Body>, Infallible> {
-    let result = send_request(request).await;
-    let mut response = Response::default();
-    let mut response_consumer = Response::default();
-    let mut response_provider = Response::default();
+    
+    print_request_metadata(&request);
 
+    let mut response = Response::default();
+    let result = send_request(request).await;
     match result {
-        Ok(t) => {
-            response = *t;
-            let clone_result = clone_response(response).await;
-            match clone_result {
-                Ok(t) => { (response_consumer, response_provider) = t; },
-                Err(e) => println!("Error:\n{}", e),
-            }
-        },
+        Ok(t) => response = *t,
         Err(e) => println!("Error:\n{}", e),
     }
 
+    print_response_metadata(&response);
+
+    let mut response_consumer = Response::default();
+    let mut response_provider = Response::default();
+    let clone_result = clone_response(response).await;
+    match clone_result {
+        Ok(t) => { (response_consumer, response_provider) = t; },
+        Err(e) => println!("Error:\n{}", e),
+    }
+    
     let result_print = print_response(response_consumer).await;
     match result_print {
         Ok(t) => {},
@@ -68,11 +71,6 @@ async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Err
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
 
-    println!("Request:");
-    println!("Method: {}", request.method());
-    println!("URI: {}", request.uri());
-    println!("Headers: {:#?}", request.headers());
-
     let mut result = client.request(request).await;
     let mut response = Response::default();
     match result {
@@ -80,9 +78,6 @@ async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Err
         Err(e) => { println!("Err! {}", e); },
     }
 
-    println!("Response:");
-    println!("Method: {}", response.status());
-    println!("Headers: {:#?}", response.headers());
 
     let b = Box::new(response);
     Ok(b)
@@ -113,3 +108,15 @@ async fn print_response(mut response: Response<Body>) -> Result<(), Error> {
     return Ok(())
 }
 
+fn print_request_metadata(request: &Request<Body>) {
+    println!("Request:");
+    println!("Method: {}", request.method());
+    println!("URI: {}", request.uri());
+    println!("Headers: {:#?}", request.headers());
+}
+
+fn print_response_metadata(response: &Response<Body>) {
+    println!("Response:");
+    println!("Method: {}", response.status());
+    println!("Headers: {:#?}", response.headers());
+}
