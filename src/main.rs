@@ -4,12 +4,18 @@
 #![allow(unused_mut)]
 #![allow(unused_assignments)]
 
-use std::{convert::Infallible, net::SocketAddr};
-use hyper::{Body, Request, Response, Server, Client, StatusCode};
+use std::convert::Infallible;
+use std::net::SocketAddr;
+
+use hyper::{Body, Request, Response, Server, Client, Method, StatusCode};
+use hyper::header::{HeaderMap, HeaderName, UPGRADE};
 use hyper::body::HttpBody as _;
 use hyper::service::{make_service_fn, service_fn};
-use tokio::io::{stdout, AsyncWriteExt as _};
-use tokio::net::TcpStream;
+use hyper::upgrade::Upgraded;
+
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::stdout;
+use tokio::net::{TcpStream, TcpListener};
 use hyper_tls::HttpsConnector;
 
 //
@@ -17,36 +23,52 @@ use hyper_tls::HttpsConnector;
 // https://hyper.rs/guides/client/advanced/
 // https://tokio.rs/tokio/tutorial/async
 // https://github.com/hyperium/hyper/blob/master/examples/upgrades.rs
+// https://github.com/hyperium/hyper/issues/1884
 //
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[tokio::main]
 async fn main() { 
+
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
     let make_svc = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(handle))
+        Ok::<_, Infallible>(service_fn(handle_request))
     });
 
-    let server = Server::bind(&addr).serve(make_svc);
+    let server = Server::bind(&addr)
+        .http1_preserve_header_case(true)
+        .http1_title_case_headers(true)
+        .serve(make_svc);
 
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
     }
+
 }
 
-async fn handle(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
     
     print_request_metadata(&request);
 
     let mut response = Response::default();
-    let result = send_request(request).await;
-    match result {
-        Ok(t) => response = *t,
-        Err(e) => println!("Error:\n{}", e),
+    if request.method() == Method::CONNECT {
+        println!("CONNECT received!");
+        let result = handle_connect(request).await;
+        match result {
+            Ok(t) => response = *t,
+            Err(e) => println!("Error:\n{}", e),
+        }
+    }else{
+        println!("NON-CONNECT received!");
+        let result = send_request(request).await;
+        match result {
+            Ok(t) => response = *t,
+            Err(e) => println!("Error:\n{}", e),
+        }
     }
-
+    
     print_response_metadata(&response);
 
     let mut response_consumer = Response::default();
@@ -67,7 +89,31 @@ async fn handle(request: Request<Body>) -> Result<Response<Body>, Infallible> {
     return Ok(response)
 }
 
+async fn handle_connect(mut request: Request<Body>) -> Result<Box<Response<Body>>, Error> {
+    
+    if let Some(addr) = host_addr(request.uri()) {
+        tokio::task::spawn(async move {
+            match hyper::upgrade::on(request).await {
+                Ok(upgraded) => {
+                    if let Err(e) = tunnel(upgraded, addr).await{
+                    }
+                },
+                Err(e) => eprintln!("Upgrade error: {}", e),
+            }
+        });
+        Ok(Box::new(Response::new(Body::empty())))
+    }else{
+        eprintln!("CONNECT host is not a socket addr: {:?}", request.uri());
+        let mut response = Response::new(Body::from("CONNECT must be to a socket address."));
+        *response.status_mut() = StatusCode::BAD_REQUEST;
+        Ok(Box::new(response))
+    }
+
+}
+
+
 async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Error> {
+
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
 
@@ -78,9 +124,19 @@ async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Err
         Err(e) => { println!("Err! {}", e); },
     }
 
-
     let b = Box::new(response);
     Ok(b)
+}
+
+async fn tunnel(mut upgraded: Upgraded, addr: String) -> std::io::Result<()> {
+    let mut server = TcpStream::connect(addr).await?;
+    let (from_client, from_server) = tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
+    println!("Client wrote {} bytes and received {} bytes.", from_client, from_server);
+    Ok(())
+}
+
+fn host_addr(uri: &hyper::Uri) -> Option<String> {
+    uri.authority().and_then(|auth| Some(auth.to_string()))
 }
 
 async fn clone_response(response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
@@ -120,3 +176,4 @@ fn print_response_metadata(response: &Response<Body>) {
     println!("Method: {}", response.status());
     println!("Headers: {:#?}", response.headers());
 }
+
