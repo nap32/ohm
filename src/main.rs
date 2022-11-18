@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
 use std::sync::Arc;
 use std::fs;
+use std::io::Read;
 
 use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
 use hyper::header::{HeaderMap, HeaderName, UPGRADE};
@@ -34,6 +35,9 @@ use openssl::pkey::{PKey, Private};
 use openssl::rand;
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::x509::{X509, X509Builder, X509NameBuilder};
+
+use flate2::read::GzDecoder;
+
 //
 // https://hyper.rs/guides/server/hello-world/
 // https://hyper.rs/guides/client/advanced/
@@ -45,8 +49,6 @@ use openssl::x509::{X509, X509Builder, X509NameBuilder};
 //
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
-
-const NOT_BEFORE_OFFSET: i64 = 60;
 
 #[tokio::main]
 async fn main() { 
@@ -69,7 +71,6 @@ async fn main() {
 
 async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
     
-    print_request_metadata(&request);
 
     let mut response = Response::default();
     if request.method() == Method::CONNECT {
@@ -86,23 +87,6 @@ async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infall
         }
     }
     
-    print_response_metadata(&response);
-
-    let mut response_consumer = Response::default();
-    let mut response_provider = Response::default();
-    let clone_result = clone_response(response).await;
-    match clone_result {
-        Ok(t) => { (response_consumer, response_provider) = t; },
-        Err(e) => println!("Error:\n{}", e),
-    }
-    
-    let result_print = print_response(response_consumer).await;
-    match result_print {
-        Ok(t) => {},
-        Err(e) => println!("Error:\n{}", e),
-    }
-
-    response = response_provider;
     return Ok(response)
 }
 
@@ -112,7 +96,6 @@ async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Er
         tokio::task::spawn(async move {
             match hyper::upgrade::on(&mut request).await {
                 Ok(upgraded) => {
-                    // DOES OUR PROXY FUNCTIONALITY GO HERE?
                     let proxy_config = get_proxy_config(request).await.expect("Couldn't get proxy certificate.");
                     let stream = match TlsAcceptor::from(Arc::new(proxy_config)).accept(upgraded).await {
                             Ok(stream) => stream,
@@ -146,6 +129,8 @@ async fn send_request(request: Request<Body>) -> Result<Response<Body>, Error> {
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
 
+    //print_request_metadata(&request);
+
     let mut result = client.request(request).await;
     let mut response = Response::default();
     match result {
@@ -153,6 +138,23 @@ async fn send_request(request: Request<Body>) -> Result<Response<Body>, Error> {
         Err(e) => { println!("Err! {}", e); },
     }
 
+    //print_response_metadata(&response);
+
+    if response.headers().contains_key("content-encoding") && response.headers()["content-encoding"] == "gzip" {
+    let mut response_consumer = Response::default();
+    let mut response_provider = Response::default();
+    let clone_result = clone_response(response).await;
+    match clone_result {
+        Ok(t) => { (response_consumer, response_provider) = t; },
+        Err(e) => println!("Error:\n{}", e),
+    }
+    let result_print = print_response(response_consumer).await;
+    match result_print {
+        Ok(t) => {},
+        Err(e) => println!("Error:\n{}", e),
+    }
+    response = response_provider;
+    }
     Ok(response)
 }
 
@@ -166,21 +168,19 @@ where
     let service = service_fn(|mut req| {
         if req.version() == hyper::Version::HTTP_10 || req.version() == hyper::Version::HTTP_11
         {
+            // Abstract this into another function - you need to do absolute URI rewriting.
             let (mut parts, body) = req.into_parts();
-
             let authority = parts
                 .headers
                 .get(hyper::header::HOST)
                 .expect("Host is a required header")
                 .as_bytes();
-
             parts.uri = {
                 let mut parts = parts.uri.into_parts();
                 parts.scheme = Some(scheme.clone());
                 parts.authority = Some(Authority::try_from(authority).expect("Failed to parse authority"));
                 Uri::from_parts(parts).expect("Failed to build URI")
            };
-
             req = Request::from_parts(parts, body);
         };
 
@@ -246,7 +246,6 @@ async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certi
     let ca_cert = X509::from_pem(ca_cert_bytes).expect("Failed to parse CA certificate pem.");
     //////////
 
-    println!("Authority Host: {}", authority.host());
     let mut name_builder = X509NameBuilder::new()?;
     name_builder.append_entry_by_text("C", "US").unwrap();
     name_builder.append_entry_by_text("ST", "CA").unwrap();
@@ -263,7 +262,7 @@ async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certi
     let not_after = Asn1Time::days_from_now(365)?;
     x509_builder.set_not_after(&not_after)?;
 
-    x509_builder.set_pubkey(&pkey)?; // I wonder if this has the pubkey I'm looking for.
+    x509_builder.set_pubkey(&pkey)?; 
     x509_builder.set_issuer_name(ca_cert.subject_name())?;
 
     let alternative_name = SubjectAlternativeName::new()
@@ -279,10 +278,6 @@ async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certi
 
     x509_builder.sign(&pkey, MessageDigest::sha256())?;
     let x509 = x509_builder.build();
-    println!("Generated x509 Subject Name: {:?}", x509.subject_name());
-    println!("Generated x509 Subject Alternative Name: {:?}", x509.subject_alt_names());
-    fs::write("/tmp/proxy-cert", x509.to_pem()?).expect("Failed to write x509");
-    println!("Proxy cert written to /tmp/proxy-cert");
 
     Ok(rustls::Certificate(x509.to_der()?))
 }
@@ -300,12 +295,27 @@ fn host_addr(uri: &hyper::Uri) -> Option<String> {
     uri.authority().and_then(|auth| Some(auth.to_string()))
 }
 
-async fn clone_response(response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
-    let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
+async fn clone_response(mut response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
+    let (parts, body) = response.into_parts();
+    let body_bytes = hyper::body::to_bytes(body).await?;
     let mut response_provider = Response::builder()
-        .body(Body::from(body_bytes.clone()))?;
+        .status(parts.status.clone())
+        //.extensions(parts.extensions)
+        .version(parts.version.clone());
+    {
+        let headers = response_provider.headers_mut().unwrap();
+        headers.extend(parts.headers.clone());
+    }
+    let response_provider = response_provider.body(Body::from(body_bytes.clone()))?;
     let mut response_consumer = Response::builder()
-        .body(Body::from(body_bytes.clone()))?;
+        .status(parts.status.clone())
+        //.extension(parts.extensions)
+        .version(parts.version.clone());
+    {
+        let headers = response_consumer.headers_mut().unwrap();
+        headers.extend(parts.headers.clone());
+    }
+    let response_consumer = response_consumer.body(Body::from(body_bytes.clone()))?;
     return Ok((response_consumer, response_provider))
 }
 
@@ -318,9 +328,18 @@ async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request
     return Ok((request_consumer, request_provider))
 }
 
-async fn print_response(mut response: Response<Body>) -> Result<(), Error> {
-    while let Some(chunk) = response.body_mut().data().await {
-        stdout().write_all(&chunk?).await?;
+async fn print_response_body(mut response: Response<Body>) -> Result<(), Error> {
+    println!("Response Body:");
+    let (parts, body) = response.into_parts();
+    if parts.headers.contains_key("content-encoding") && parts.headers["content-encoding"] == "gzip"{
+        let body_bytes = hyper::body::to_bytes(body).await?;
+        let mut gunzipped = String::new();
+        let mut d = GzDecoder::new(&*body_bytes);
+        d.read_to_string(&mut gunzipped).unwrap();
+        println!("{:?}", gunzipped);
+    }else{
+        let body_bytes = hyper::body::to_bytes(body).await?;
+        println!("Body:\n{:?}", body_bytes);
     }
     return Ok(())
 }
@@ -338,3 +357,7 @@ fn print_response_metadata(response: &Response<Body>) {
     println!("Headers: {:#?}", response.headers());
 }
 
+async fn print_response(response: Response<Body>) -> Result<(), Error>{
+    print_response_metadata(&response);
+    print_response_body(response).await
+}
