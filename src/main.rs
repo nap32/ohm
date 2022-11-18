@@ -6,27 +6,47 @@
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::time::{Duration, SystemTime};
+use std::sync::Arc;
+use std::fs;
 
-use hyper::{Body, Request, Response, Server, Client, Method, StatusCode};
+use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
 use hyper::header::{HeaderMap, HeaderName, UPGRADE};
 use hyper::body::HttpBody as _;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
+use hyper::server::conn::Http;
 
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use tokio::io::stdout;
 use tokio::net::{TcpStream, TcpListener};
-use hyper_tls::HttpsConnector;
 
+use hyper_tls::HttpsConnector;
+use tokio_rustls::{TlsAcceptor, TlsStream};
+use tokio_rustls::rustls;
+use tokio_rustls::rustls::{ServerConfig, ConfigBuilder, PrivateKey};
+use http::uri::{Authority, Scheme};
+
+use openssl::asn1::{Asn1Integer, Asn1Time};
+use openssl::bn::BigNum;
+use openssl::hash::MessageDigest;
+use openssl::pkey::{PKey, Private};
+use openssl::rand;
+use openssl::x509::extension::SubjectAlternativeName;
+use openssl::x509::{X509, X509Builder, X509NameBuilder};
 //
 // https://hyper.rs/guides/server/hello-world/
 // https://hyper.rs/guides/client/advanced/
 // https://tokio.rs/tokio/tutorial/async
 // https://github.com/hyperium/hyper/blob/master/examples/upgrades.rs
 // https://github.com/hyperium/hyper/issues/1884
+// https://github.com/omjadas/hudsucker/blob/main/src/certificate_authority/openssl_authority.rs
+// https://docs.rs/crate/openssl/latest/source/examples/mk_certs.rs
 //
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
+const NOT_BEFORE_OFFSET: i64 = 60;
 
 #[tokio::main]
 async fn main() { 
@@ -45,7 +65,6 @@ async fn main() {
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
     }
-
 }
 
 async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -54,17 +73,15 @@ async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infall
 
     let mut response = Response::default();
     if request.method() == Method::CONNECT {
-        println!("CONNECT received!");
         let result = handle_connect(request).await;
         match result {
-            Ok(t) => response = *t,
+            Ok(t) => response = t,
             Err(e) => println!("Error:\n{}", e),
         }
     }else{
-        println!("NON-CONNECT received!");
         let result = send_request(request).await;
         match result {
-            Ok(t) => response = *t,
+            Ok(t) => response = t,
             Err(e) => println!("Error:\n{}", e),
         }
     }
@@ -89,30 +106,42 @@ async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infall
     return Ok(response)
 }
 
-async fn handle_connect(mut request: Request<Body>) -> Result<Box<Response<Body>>, Error> {
+async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Error> {
     
     if let Some(addr) = host_addr(request.uri()) {
         tokio::task::spawn(async move {
-            match hyper::upgrade::on(request).await {
+            match hyper::upgrade::on(&mut request).await {
                 Ok(upgraded) => {
-                    if let Err(e) = tunnel(upgraded, addr).await{
+                    // DOES OUR PROXY FUNCTIONALITY GO HERE?
+                    let proxy_config = get_proxy_config(request).await.expect("Couldn't get proxy certificate.");
+                    let stream = match TlsAcceptor::from(Arc::new(proxy_config)).accept(upgraded).await {
+                            Ok(stream) => stream,
+                            Err(e) => { return },
+                    };
+                    if let Err(e) = serve_stream(stream, Scheme::HTTPS).await {
+                        if !e.to_string().starts_with("error shutting down connection") {
+                            println!("Handle Connect's serve_stream error! {}", e);
+                        }
                     }
+                    //if let Err(e) = tunnel(upgraded, addr).await{
+                    //    eprintln!("Upgrade error: {}", e)
+                    //}
                 },
                 Err(e) => eprintln!("Upgrade error: {}", e),
             }
         });
-        Ok(Box::new(Response::new(Body::empty())))
+        Ok(Response::new(Body::empty()))
     }else{
         eprintln!("CONNECT host is not a socket addr: {:?}", request.uri());
         let mut response = Response::new(Body::from("CONNECT must be to a socket address."));
         *response.status_mut() = StatusCode::BAD_REQUEST;
-        Ok(Box::new(response))
+        Ok(response)
     }
 
 }
 
 
-async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Error> {
+async fn send_request(request: Request<Body>) -> Result<Response<Body>, Error> {
 
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
@@ -124,13 +153,145 @@ async fn send_request(request: Request<Body>) -> Result<Box<Response<Body>>, Err
         Err(e) => { println!("Err! {}", e); },
     }
 
-    let b = Box::new(response);
-    Ok(b)
+    Ok(response)
 }
 
+// This function is stolen from hudsucker -- I think it's a bit complex for my level of Rustacean,
+// I need to rewrite it -- but it's making sure it replaces the URI with https://authority or
+// something.
+async fn serve_stream<I>(stream: I, scheme: Scheme) -> Result<(), Error>
+where
+    I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let service = service_fn(|mut req| {
+        if req.version() == hyper::Version::HTTP_10 || req.version() == hyper::Version::HTTP_11
+        {
+            let (mut parts, body) = req.into_parts();
+
+            let authority = parts
+                .headers
+                .get(hyper::header::HOST)
+                .expect("Host is a required header")
+                .as_bytes();
+
+            parts.uri = {
+                let mut parts = parts.uri.into_parts();
+                parts.scheme = Some(scheme.clone());
+                parts.authority = Some(Authority::try_from(authority).expect("Failed to parse authority"));
+                Uri::from_parts(parts).expect("Failed to build URI")
+           };
+
+            req = Request::from_parts(parts, body);
+        };
+
+        send_request(req)
+    });
+
+    let result = Http::new().serve_connection(stream, service).with_upgrades().await;
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
+async fn get_proxy_config(mut request: Request<Body>) -> Result<ServerConfig, Error>{
+    
+    let authority = request
+        .uri()
+        .authority()
+        .expect("URI does not contain authority");
+    
+    create_server_config(authority).await
+}
+
+async fn create_server_config(authority: &Authority) -> Result<ServerConfig, Error>{
+    
+    //  This needs refactored.
+    let private_key_bytes: &[u8] = include_bytes!("../ca/ohm.key");
+    let pkey = PKey::private_key_from_pem(private_key_bytes).expect("Failed to parse private key");
+    let private_key = rustls::PrivateKey(
+        pkey.private_key_to_der()
+            .expect("Failed to encode private key"),
+    );
+    //////////////////////////
+
+    let result = create_proxy_certificate(authority).await;
+    let cert : rustls::Certificate;
+    match result {
+        Ok(t) => { cert = t; },
+        Err(e) => { return Err(e) },
+    }
+
+    let mut server_config = ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth()
+        .with_single_cert(vec!(cert), private_key.clone())
+        .expect("Failed to build ServerConfig.");
+
+    server_config.alpn_protocols = vec![
+        #[cfg(feature = "http2")]
+        b"h2".to_vec(),
+        b"http/1.1".to_vec(),
+    ];
+
+    Ok(server_config)
+}
+
+async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certificate, Error> {
+    
+    // This needs refactored.
+    let private_key_bytes: &[u8] = include_bytes!("../ca/ohm.key");
+    let pkey = PKey::private_key_from_pem(private_key_bytes).expect("Failed to parse private key");
+    let ca_cert_bytes: &[u8] = include_bytes!("../ca/ohm.pem");
+    let ca_cert = X509::from_pem(ca_cert_bytes).expect("Failed to parse CA certificate pem.");
+    //////////
+
+    println!("Authority Host: {}", authority.host());
+    let mut name_builder = X509NameBuilder::new()?;
+    name_builder.append_entry_by_text("C", "US").unwrap();
+    name_builder.append_entry_by_text("ST", "CA").unwrap();
+    name_builder.append_entry_by_text("O", "OHM").unwrap();
+    name_builder.append_entry_by_text("CN", authority.host()).unwrap();
+    let name = name_builder.build();
+
+    let mut x509_builder = X509Builder::new().unwrap();
+    x509_builder.set_subject_name(&name)?;
+    x509_builder.set_version(2)?;
+
+    let not_before = Asn1Time::days_from_now(0)?;
+    x509_builder.set_not_before(&not_before)?;
+    let not_after = Asn1Time::days_from_now(365)?;
+    x509_builder.set_not_after(&not_after)?;
+
+    x509_builder.set_pubkey(&pkey)?; // I wonder if this has the pubkey I'm looking for.
+    x509_builder.set_issuer_name(ca_cert.subject_name())?;
+
+    let alternative_name = SubjectAlternativeName::new()
+        .dns(authority.host())
+        .build(&x509_builder.x509v3_context(Some(&ca_cert), None))?;
+    x509_builder.append_extension(alternative_name)?;
+
+    let mut serial_number = [0; 16];
+    rand::rand_bytes(&mut serial_number)?;
+    let serial_number = BigNum::from_slice(&serial_number)?;
+    let serial_number = Asn1Integer::from_bn(&serial_number)?;
+    x509_builder.set_serial_number(&serial_number)?;
+
+    x509_builder.sign(&pkey, MessageDigest::sha256())?;
+    let x509 = x509_builder.build();
+    println!("Generated x509 Subject Name: {:?}", x509.subject_name());
+    println!("Generated x509 Subject Alternative Name: {:?}", x509.subject_alt_names());
+    fs::write("/tmp/proxy-cert", x509.to_pem()?).expect("Failed to write x509");
+    println!("Proxy cert written to /tmp/proxy-cert");
+
+    Ok(rustls::Certificate(x509.to_der()?))
+}
+
+// This works - plug it into the handle_connect function w/o the TlsAcceptor line.
 async fn tunnel(mut upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     let mut server = TcpStream::connect(addr).await?;
     let (from_client, from_server) = tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
+    
     println!("Client wrote {} bytes and received {} bytes.", from_client, from_server);
     Ok(())
 }
