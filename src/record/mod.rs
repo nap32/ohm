@@ -2,12 +2,6 @@
 #![allow(dead_code)]
 #![allow(unused_assignments)]
 
-use crate::record::{OhmRecord, OhmRequest, OhmResponse};
-use hyper::{Request, Response, Body, StatusCode};
-use hyper::header::{HeaderMap, HeaderName, HeaderValue};
-use serde::{de, ser, Serialize, Deserialize}; // https://serde.rs/
-use std::collections::HashMap;
-
 // ABOUT -
 // Proof of concept for working with hyper's library and transforming data.
 // Need to define the appropriate structs and implement / define necessary
@@ -16,9 +10,11 @@ use std::collections::HashMap;
 // Use serde and serde_json w/ RedisJSON and RedisSearch.
 mod record {
 
+    use crate::record::record;
     use std::collections::HashMap;
     use serde::{Serialize, Deserialize};
-    use serde_json;
+    use serde_json::Value;
+    use hyper::{Request, Response, Body, StatusCode, Method};
 
     // #[derive(...)]
     // pub struct N {}
@@ -26,8 +22,12 @@ mod record {
     // impl Eq for N {}
     // impl N {}
 
+///
+/// REQUEST
+///
+    
     #[derive(Serialize, Deserialize, Debug, Clone)]
-    pub struct OhmRequest {
+    pub struct RequestRecord {
         pub method : String,
         pub scheme : String,
         pub host : String,
@@ -36,7 +36,7 @@ mod record {
         pub headers : HashMap<String, String>, // std::collections::HashMap;
         pub body : String, // Is this best as String or Vec<u8> byte-string?
     }
-    impl PartialEq for OhmRequest {
+    impl PartialEq for RequestRecord {
         fn eq(&self, other: &Self) -> bool {
             (self.method == other.method) &&
                 (self.scheme == other.scheme) &&
@@ -47,8 +47,8 @@ mod record {
                 (self.body == other.body)
         }
     }
-    impl Eq for OhmRequest {}
-    impl OhmRequest {
+    impl Eq for RequestRecord {}
+    impl RequestRecord {
         pub fn new(request : hyper::Request<hyper::Body>) -> Self {
             let (parts, _body) = request.into_parts();
             let me = Self {
@@ -72,21 +72,25 @@ mod record {
         }
     }
 
+///
+/// RESPONSE
+///
+
     #[derive(Serialize, Deserialize, Debug, Clone)]
-    pub struct OhmResponse {
+    pub struct ResponseRecord {
         pub status: String,
         pub headers : HashMap<String, String>, // std::collections::HashMap;
         pub body : String, // Is this best as String or Vec<u8> byte-string?
     }
-    impl PartialEq for OhmResponse {
+    impl PartialEq for ResponseRecord {
         fn eq(&self, other: &Self) -> bool {
             (self.status == other.status) &&
                 (self.headers == other.headers) &&
                 (self.body == other.body)
         }
     }
-    impl Eq for OhmResponse {}
-    impl OhmResponse {
+    impl Eq for ResponseRecord {}
+    impl ResponseRecord {
         pub fn new(response : hyper::Response<hyper::Body>) -> Self {
             let mut me = Self {
                 status : response.status().to_string().clone(),
@@ -98,30 +102,34 @@ mod record {
             }
             return me
         }
-        pub fn get_json(self) -> std::string::String {
+        pub fn get_json(&self) -> std::string::String {
             let serialized = serde_json::to_string(&self).unwrap();
             return serialized
         }
     }
 
+///
+/// RECORD
+///
+
     #[derive(Serialize, Deserialize, Debug, Clone)]
-    pub struct OhmRecord {
+    pub struct Record {
         pub uri : String,
-        pub request : OhmRequest,
-        pub response : OhmResponse,
+        pub request : record::RequestRecord,
+        pub response : record::ResponseRecord,
     }
-    impl PartialEq for OhmRecord {
+    impl PartialEq for Record {
         fn eq(&self, other: &Self) -> bool {
             (self.uri == other.uri) &&
                 (self.request == other.request) &&
                 (self.response == other.response)
         }
     }
-    impl Eq for OhmRecord {}
-    impl OhmRecord {
+    impl Eq for Record {}
+    impl Record {
         pub fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
-            let ohm_request = OhmRequest::new(request);
-            let ohm_response = OhmResponse::new(response);
+            let ohm_request = record::RequestRecord::new(request);
+            let ohm_response = record::ResponseRecord::new(response);
             let me = Self {
                 uri : ohm_request.get_uri(),
                 request : ohm_request,
@@ -129,37 +137,18 @@ mod record {
             };
             return me 
         }
-        pub fn get_key(self) -> std::string::String {
-            let key = self.uri;
+        pub fn get_key(&self) -> std::string::String {
+            let key = format!("{}:{}:{}", self.request.method, self.request.host, self.request.path);
             return key
         }
         pub fn get_uri(&self) -> std::string::String {
             return self.request.get_uri()
         }
-        pub fn get_json(self) -> std::string::String {
+        pub fn get_json(&self) -> std::string::String {
             let serialized = serde_json::to_string(&self).unwrap();
             return serialized
         }
     }
-}
-
-fn print_record(record: OhmRecord)
-{
-    println!(":: RECORD ::");
-    println!(":: {}", record.uri);
-    println!(":: :: REQUEST :: ::");
-    println!(":: {}", record.request.method);
-    println!(":: {}", record.request.scheme);
-    println!(":: {}", record.request.host);
-    println!(":: {}", record.request.path);
-    println!(":: {}", record.request.query);
-    println!(":: {:?}", record.request.headers);
-    println!(":: :: :: :: ::\n{:?}\n:: :: :: :: ::", record.request.body);
-    println!(":: :: RESPONSE :: ::");
-    println!(":: {}", record.response.status);
-    println!(":: {:?}", record.response.headers);
-    println!(":: :: :: :: ::\n{:?}\n:: :: :: :: ::", record.response.body);
-    
 }
 
 #[cfg(test)]
