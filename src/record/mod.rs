@@ -31,7 +31,7 @@ mod record {
         pub query : String,
         pub request_headers : HashMap<String, String>, 
         pub request_body : Vec<u8>,
-        pub status: String,
+        pub status: u16,
         pub response_headers : HashMap<String, String>, 
         pub response_body : Vec<u8>, 
     }
@@ -55,12 +55,12 @@ mod record {
             let mut me = Self {
                 method : "GET".to_string(),
                 scheme : request.uri().scheme().unwrap().to_string(),   // I think these .unwrap()'s are
-                host : request.uri().host().unwrap().to_string(),       // are going to cause trouble.
+                host : request.uri().host().unwrap().to_string(),       // are going to cause trouble for failure case.
                 path : request.uri().path().to_string(),
                 query : request.uri().query().unwrap().to_string(),
                 request_headers : HashMap::<std::string::String, std::string::String>::new(),
                 request_body : Vec::<u8>::new(),
-                status : response.status().to_string().clone(),
+                status : response.status().as_u16(),
                 response_headers : HashMap::<std::string::String, std::string::String>::new(),
                 response_body : Vec::<u8>::new(),
             };
@@ -79,11 +79,37 @@ mod record {
             return key
         }
         pub fn get_uri(&self) -> std::string::String {
-            return format!("{}://{}/{}", self.scheme, self.host, self.path); 
+            return format!("{}://{}{}", self.scheme, self.host, self.path); 
         }
         pub fn get_json(&self) -> std::string::String {
             let serialized = serde_json::to_string(&self).unwrap();
             return serialized
+        }
+        pub fn get_hyper_request(&self) -> Result<hyper::Request<hyper::Body>, std::io::Error> {
+            let mut request = hyper::Request::builder()
+                .method(hyper::Method::from_bytes(self.method.as_bytes()).unwrap())
+                .uri(format!("{}://{}{}?{}", self.scheme, self.host, self.path, self.query));
+            for (key, val) in &self.request_headers {
+               request = request.header(key, val);
+            }
+            let request = request.body(hyper::Body::from(self.request_body.clone()))
+                .unwrap();
+            return Ok(request)
+        }
+        pub fn get_hyper_response(&self) -> Result<hyper::Response<hyper::Body>, std::io::Error> {
+            let mut response = hyper::Response::builder()
+                .status(self.status);
+            for (key, val) in &self.response_headers {
+               response = response.header(key, val);
+            }
+            let request = response.body(hyper::Body::from(self.response_body.clone()))
+                .unwrap();
+            return Ok(request)
+        }
+        pub fn get_hyper_pair(&self) -> Result<(hyper::Request<hyper::Body>, hyper::Response<hyper::Body>), std::io::Error> {
+            let request = self.get_hyper_request().unwrap();
+            let response = self.get_hyper_response().unwrap();
+            return Ok((request, response))
         }
     }
 }
