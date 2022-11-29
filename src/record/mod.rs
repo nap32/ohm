@@ -2,13 +2,7 @@
 #![allow(dead_code)]
 #![allow(unused_assignments)]
 
-// ABOUT -
-// Proof of concept for working with hyper's library and transforming data.
-// Need to define the appropriate structs and implement / define necessary
-// traits to support robust and convenient interactions.
-// PLAN -
-// Use serde and serde_json w/ RedisJSON and RedisSearch.
-mod record {
+pub mod record {
 
     use crate::record::record;
     use std::collections::HashMap;
@@ -51,13 +45,20 @@ mod record {
     }
     impl Eq for Record {}
     impl Record {
-        pub fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
+        pub async fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
+            // thread 'tokio-runtime-worker' panicked at 'called `Option::unwrap()` on a `None` value',
+            // src/record/mod.rs:54:47 -> 55 w/ this comment -> query is 'None'.
+            // Do we either set everything to Option(String) or do we parse and pass empty-string?
             let mut me = Self {
                 method : "GET".to_string(),
-                scheme : request.uri().scheme().unwrap().to_string(),   // I think these .unwrap()'s are
-                host : request.uri().host().unwrap().to_string(),       // are going to cause trouble for failure case.
+                scheme : request.uri().scheme().unwrap().to_string(),
+                host : request.uri().host().unwrap().to_string(),
                 path : request.uri().path().to_string(),
-                query : request.uri().query().unwrap().to_string(),
+                //query : request.uri().query().unwrap().to_string(),
+                query : match request.uri().query(){
+                    Some(q) => q.to_string(),
+                    None => "".to_string(),
+                },
                 request_headers : HashMap::<std::string::String, std::string::String>::new(),
                 request_body : Vec::<u8>::new(),
                 status : response.status().as_u16(),
@@ -70,8 +71,8 @@ mod record {
             for (key, value) in response.headers() {
                 me.response_headers.insert(key.to_string(), std::string::String::from(value.to_str().unwrap()));
             }
-            //me.request_body = hyper::body::to_bytes(request.into_body()).await.unwrap().to_vec();
-            //me.response_body = hyper::body::to_bytes(request.into_body()).await.unwrap().to_vec();
+            me.request_body = hyper::body::to_bytes(request.into_body()).await.unwrap().to_vec();
+            me.response_body = hyper::body::to_bytes(response.into_body()).await.unwrap().to_vec();
             return me 
         }
         pub fn get_key(&self) -> std::string::String {
@@ -116,10 +117,11 @@ mod record {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Imports names from outer (for mod tests) scope.
+    use super::*; 
     
     #[test]
     fn test_hyper_to_record() -> Result<(), std::io::Error> {
+        
         // Use module to convert hyper request+response to record.
         // Use module to convert record to hyper request+hyper response.
         // assert_eq!

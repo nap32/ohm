@@ -4,22 +4,22 @@
 #![allow(unused_mut)]
 #![allow(unused_assignments)]
 
+pub mod record;
+use record::record::*;
+
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::time::{Duration, SystemTime};
 use std::sync::Arc;
-use std::fs;
 use std::io::Read;
 
 use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
-use hyper::header::{HeaderMap, HeaderName, UPGRADE};
-use hyper::body::HttpBody as _;
+//use hyper::header::{HeaderMap, HeaderName, UPGRADE};
+//use hyper::body::HttpBody as _;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
 use hyper::server::conn::Http;
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
-use tokio::io::stdout;
 use tokio::net::{TcpStream, TcpListener};
 
 use hyper_tls::HttpsConnector;
@@ -70,23 +70,22 @@ async fn main() {
 }
 
 async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
-    
-
-    let mut response = Response::default();
+    let mut response : Response<Body>;
+    let mut result : Result<Response<Body>, Error>; 
     if request.method() == Method::CONNECT {
-        let result = handle_connect(request).await;
-        match result {
-            Ok(t) => response = t,
-            Err(e) => println!("Error:\n{}", e),
-        }
+        result = handle_connect(request).await;
     }else{
-        let result = send_request(request).await;
-        match result {
-            Ok(t) => response = t,
-            Err(e) => println!("Error:\n{}", e),
-        }
+        result = send_request(request).await;
     }
-    
+    match result {
+        Ok(t) => response = t,
+        Err(e) => {
+            response = Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(e.to_string()))
+                .unwrap();
+        },
+    }
     return Ok(response)
 }
 
@@ -106,9 +105,6 @@ async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Er
                             println!("Handle Connect's serve_stream error! {}", e);
                         }
                     }
-                    //if let Err(e) = tunnel(upgraded, addr).await{
-                    //    eprintln!("Upgrade error: {}", e)
-                    //}
                 },
                 Err(e) => eprintln!("Upgrade error: {}", e),
             }
@@ -123,47 +119,11 @@ async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Er
 
 }
 
-
-async fn send_request(request: Request<Body>) -> Result<Response<Body>, Error> {
-
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-
-    //print_request_metadata(&request);
-
-    let mut result = client.request(request).await;
-    let mut response = Response::default();
-    match result {
-        Ok(t) => { response = t; },
-        Err(e) => { println!("Err! {}", e); },
-    }
-
-    //print_response_metadata(&response);
-
-    if response.headers().contains_key("content-encoding") && response.headers()["content-encoding"] == "gzip" {
-    let mut response_consumer = Response::default();
-    let mut response_provider = Response::default();
-    let clone_result = clone_response(response).await;
-    match clone_result {
-        Ok(t) => { (response_consumer, response_provider) = t; },
-        Err(e) => println!("Error:\n{}", e),
-    }
-    let result_print = print_response(response_consumer).await;
-    match result_print {
-        Ok(t) => {},
-        Err(e) => println!("Error:\n{}", e),
-    }
-    response = response_provider;
-    }
-    Ok(response)
-}
-
-// This function is stolen from hudsucker -- I think it's a bit complex for my level of Rustacean,
-// I need to rewrite it -- but it's making sure it replaces the URI with https://authority or
-// something.
+// This function needs refactored - borrowed hudsucker's handling to get a proof-of-concept.
+// For proxying, must rewrite URI into absolute format - {SCHEME}://{AUTHORITY}/{URI}
 async fn serve_stream<I>(stream: I, scheme: Scheme) -> Result<(), Error>
 where
-    I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let service = service_fn(|mut req| {
         if req.version() == hyper::Version::HTTP_10 || req.version() == hyper::Version::HTTP_11
@@ -180,7 +140,7 @@ where
                 parts.scheme = Some(scheme.clone());
                 parts.authority = Some(Authority::try_from(authority).expect("Failed to parse authority"));
                 Uri::from_parts(parts).expect("Failed to build URI")
-           };
+            };
             req = Request::from_parts(parts, body);
         };
 
@@ -193,6 +153,44 @@ where
         Err(e) => Err(Box::new(e)),
     }
 }
+
+async fn send_request(request: Request<Body>) -> Result<Response<Body>, Error> {
+
+    let https = HttpsConnector::new();
+    let client = Client::builder().build::<_, hyper::Body>(https);
+
+    let (mut request_traffic, mut request_record) = clone_request(request).await.unwrap();
+
+    let mut result = client.request(request_traffic).await;
+    let mut response = Response::default();
+    match result {
+        Ok(t) => { response = t; },
+        Err(e) => { println!("Err! {}", e); },
+    }
+
+    let (mut response_traffic, mut response_record) = clone_response(response).await.unwrap();
+    
+    let record = parse_record(request_record, response_record).await;
+    filter_record(record).await;
+
+    if response_traffic.headers().contains_key("content-encoding") && response_traffic.headers()["content-encoding"] == "gzip" {
+        // You need to deflate GZIP.
+    }
+
+    Ok(response_traffic)
+}
+
+async fn parse_record(request: Request<Body>, response: Response<Body>) -> Record{
+    Record::new(request, response).await
+}
+async fn filter_record(record: Record) {
+    // TODO - Printing a record for now.
+    let (request, response) = record.get_hyper_pair().unwrap();
+    print_request(request).await.unwrap();
+    print_response(response).await.unwrap();
+}
+
+///// Pull out all of these functions into CA module.
 
 async fn get_proxy_config(mut request: Request<Body>) -> Result<ServerConfig, Error>{
     
@@ -282,11 +280,10 @@ async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certi
     Ok(rustls::Certificate(x509.to_der()?))
 }
 
-// This works - plug it into the handle_connect function w/o the TlsAcceptor line.
+// This was used before TLS interception was working - left as a utility to troubleshoot.
 async fn tunnel(mut upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     let mut server = TcpStream::connect(addr).await?;
     let (from_client, from_server) = tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
-    
     println!("Client wrote {} bytes and received {} bytes.", from_client, from_server);
     Ok(())
 }
@@ -295,37 +292,101 @@ fn host_addr(uri: &hyper::Uri) -> Option<String> {
     uri.authority().and_then(|auth| Some(auth.to_string()))
 }
 
+
+// Refactor this to mirror the clone_response() function above.
+async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
+    let (parts, body) = request.into_parts();
+    let body_bytes = hyper::body::to_bytes(body).await?;
+    
+    let mut req1 = Request::builder()
+        .uri(parts.uri.clone())
+        .method(parts.method.clone())
+        .version(parts.version.clone());
+    {
+        let headers = req1.headers_mut().unwrap();
+        headers.extend(parts.headers.clone());
+    }
+    let req1 = req1.body(Body::from(body_bytes.clone()))?;
+
+    let mut req2 = Request::builder()
+        .uri(parts.uri.clone())
+        .method(parts.method.clone())
+        .version(parts.version.clone());
+    {
+        let headers = req2.headers_mut().unwrap();
+        headers.extend(parts.headers.clone());
+    }
+    let req2 = req2.body(Body::from(body_bytes.clone()))?;
+    
+    return Ok((req1, req2))
+}
+
+// "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
+// I don't think you can borrow as a reference, and it will be consumed when processing the body.
 async fn clone_response(mut response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
     let (parts, body) = response.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
-    let mut response_provider = Response::builder()
+    
+    let mut res1 = Response::builder()
         .status(parts.status.clone())
-        //.extensions(parts.extensions)
         .version(parts.version.clone());
     {
-        let headers = response_provider.headers_mut().unwrap();
+        let headers = res1.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
-    let response_provider = response_provider.body(Body::from(body_bytes.clone()))?;
-    let mut response_consumer = Response::builder()
+    let res1 = res1.body(Body::from(body_bytes.clone()))?;
+    
+    let mut res2 = Response::builder()
         .status(parts.status.clone())
-        //.extension(parts.extensions)
         .version(parts.version.clone());
     {
-        let headers = response_consumer.headers_mut().unwrap();
+        let headers = res2.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
-    let response_consumer = response_consumer.body(Body::from(body_bytes.clone()))?;
-    return Ok((response_consumer, response_provider))
+    let res2 = res2.body(Body::from(body_bytes.clone()))?;
+
+    return Ok((res1, res2))
 }
 
-async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
-    let body_bytes = hyper::body::to_bytes(request.into_body()).await?;
-    let mut request_provider = Request::builder()
-        .body(Body::from(body_bytes.clone()))?;
-    let mut request_consumer = Request::builder()
-        .body(Body::from(body_bytes.clone()))?;
-    return Ok((request_consumer, request_provider))
+// Ideally drop all of these 'print' functions because functionality has been moved into Record.
+
+async fn print_request(request: Request<Body>) -> Result<(), Error>{
+    print_request_metadata(&request);
+    print_request_body(request).await
+}
+
+fn print_request_metadata(request: &Request<Body>) {
+    println!("Request:");
+    println!("Method: {}", request.method());
+    println!("URI: {}", request.uri());
+    println!("Headers: {:#?}", request.headers());
+}
+
+async fn print_request_body(mut request: Request<Body>) -> Result<(), Error> {
+    println!("Request Body:");
+    let (parts, body) = request.into_parts();
+    if parts.headers.contains_key("content-encoding") && parts.headers["content-encoding"] == "gzip" {
+        let body_bytes = hyper::body::to_bytes(body).await?;
+        let mut gunzipped = String::new();
+        let mut d = GzDecoder::new(&*body_bytes);
+        d.read_to_string(&mut gunzipped).unwrap();
+        println!("{:?}", gunzipped);
+    }else{
+        let body_bytes = hyper::body::to_bytes(body).await?;
+        println!("{:?}", body_bytes);
+    }
+    return Ok(())
+}
+
+async fn print_response(response: Response<Body>) -> Result<(), Error>{
+    print_response_metadata(&response);
+    print_response_body(response).await
+}
+
+fn print_response_metadata(response: &Response<Body>) {
+    println!("Response:");
+    println!("Method: {}", response.status());
+    println!("Headers: {:#?}", response.headers());
 }
 
 async fn print_response_body(mut response: Response<Body>) -> Result<(), Error> {
@@ -339,25 +400,26 @@ async fn print_response_body(mut response: Response<Body>) -> Result<(), Error> 
         println!("{:?}", gunzipped);
     }else{
         let body_bytes = hyper::body::to_bytes(body).await?;
-        println!("Body:\n{:?}", body_bytes);
+        println!("{:?}", body_bytes);
     }
     return Ok(())
 }
 
-fn print_request_metadata(request: &Request<Body>) {
-    println!("Request:");
-    println!("Method: {}", request.method());
-    println!("URI: {}", request.uri());
-    println!("Headers: {:#?}", request.headers());
+#[cfg(test)]
+mod tests {
+    use super::*; // Imports names from outer (for mod tests) scope.
+    
+   // #[test]
+   // async fn test_clone_response() -> Result<(), Error> {
+   //     let mut response = Response::builder()
+   //         .status(200)
+   //         .version(hyper::Version::HTTP_11)
+   //         .header(hyper::header::HOST, "Foobar")
+   //         .body(Body::from("foobar"));
+   //     let (response_foo, response_bar) = clone_response(response).await().unwrap();
+   //     assert_eq!(response_foo.to_bytes(), response_bar.to_bytes());
+   //     Ok(())
+   // }
 }
 
-fn print_response_metadata(response: &Response<Body>) {
-    println!("Response:");
-    println!("Method: {}", response.status());
-    println!("Headers: {:#?}", response.headers());
-}
 
-async fn print_response(response: Response<Body>) -> Result<(), Error>{
-    print_response_metadata(&response);
-    print_response_body(response).await
-}
