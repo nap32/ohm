@@ -12,6 +12,10 @@ pub mod data;
 use data::mongo::*;
 use crate::data::mongo::Mongo;
 
+pub mod service;
+use service::ca::*;
+use crate::service::ca::CA;
+
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -98,7 +102,8 @@ async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Er
         tokio::task::spawn(async move {
             match hyper::upgrade::on(&mut request).await {
                 Ok(upgraded) => {
-                    let proxy_config = get_proxy_config(request).await.expect("Couldn't get proxy certificate.");
+                    let mut ca = CA::new().await;
+                    let proxy_config = ca.get_proxy_config(request).await.expect("Couldn't get proxy certificate.");
                     let stream = match TlsAcceptor::from(Arc::new(proxy_config)).accept(upgraded).await {
                             Ok(stream) => stream,
                             Err(e) => { return },
@@ -193,110 +198,11 @@ async fn filter_record(record: Record) {
     print_response(response).await.unwrap();
 }
 
-///// Pull out all of these functions into CA module.
-
-async fn get_proxy_config(mut request: Request<Body>) -> Result<ServerConfig, Error>{
-    
-    let authority = request
-        .uri()
-        .authority()
-        .expect("URI does not contain authority");
-    
-    create_server_config(authority).await
-}
-
-async fn create_server_config(authority: &Authority) -> Result<ServerConfig, Error>{
-    
-    //  This needs refactored.
-    let private_key_bytes: &[u8] = include_bytes!("../ca/ohm.key");
-    let pkey = PKey::private_key_from_pem(private_key_bytes).expect("Failed to parse private key");
-    let private_key = rustls::PrivateKey(
-        pkey.private_key_to_der()
-            .expect("Failed to encode private key"),
-    );
-    //////////////////////////
-
-    let result = create_proxy_certificate(authority).await;
-    let cert : rustls::Certificate;
-    match result {
-        Ok(t) => { cert = t; },
-        Err(e) => { return Err(e) },
-    }
-
-    let mut server_config = ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth()
-        .with_single_cert(vec!(cert), private_key.clone())
-        .expect("Failed to build ServerConfig.");
-
-    server_config.alpn_protocols = vec![
-        #[cfg(feature = "http2")]
-        b"h2".to_vec(),
-        b"http/1.1".to_vec(),
-    ];
-
-    Ok(server_config)
-}
-
-async fn create_proxy_certificate(authority: &Authority) -> Result<rustls::Certificate, Error> {
-    
-    // This needs refactored.
-    let private_key_bytes: &[u8] = include_bytes!("../ca/ohm.key");
-    let pkey = PKey::private_key_from_pem(private_key_bytes).expect("Failed to parse private key");
-    let ca_cert_bytes: &[u8] = include_bytes!("../ca/ohm.pem");
-    let ca_cert = X509::from_pem(ca_cert_bytes).expect("Failed to parse CA certificate pem.");
-    //////////
-
-    let mut name_builder = X509NameBuilder::new()?;
-    name_builder.append_entry_by_text("C", "US").unwrap();
-    name_builder.append_entry_by_text("ST", "CA").unwrap();
-    name_builder.append_entry_by_text("O", "OHM").unwrap();
-    name_builder.append_entry_by_text("CN", authority.host()).unwrap();
-    let name = name_builder.build();
-
-    let mut x509_builder = X509Builder::new().unwrap();
-    x509_builder.set_subject_name(&name)?;
-    x509_builder.set_version(2)?;
-
-    let not_before = Asn1Time::days_from_now(0)?;
-    x509_builder.set_not_before(&not_before)?;
-    let not_after = Asn1Time::days_from_now(365)?;
-    x509_builder.set_not_after(&not_after)?;
-
-    x509_builder.set_pubkey(&pkey)?; 
-    x509_builder.set_issuer_name(ca_cert.subject_name())?;
-
-    let alternative_name = SubjectAlternativeName::new()
-        .dns(authority.host())
-        .build(&x509_builder.x509v3_context(Some(&ca_cert), None))?;
-    x509_builder.append_extension(alternative_name)?;
-
-    let mut serial_number = [0; 16];
-    rand::rand_bytes(&mut serial_number)?;
-    let serial_number = BigNum::from_slice(&serial_number)?;
-    let serial_number = Asn1Integer::from_bn(&serial_number)?;
-    x509_builder.set_serial_number(&serial_number)?;
-
-    x509_builder.sign(&pkey, MessageDigest::sha256())?;
-    let x509 = x509_builder.build();
-
-    Ok(rustls::Certificate(x509.to_der()?))
-}
-
-// This was used before TLS interception was working - left as a utility to troubleshoot.
-async fn tunnel(mut upgraded: Upgraded, addr: String) -> std::io::Result<()> {
-    let mut server = TcpStream::connect(addr).await?;
-    let (from_client, from_server) = tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
-    println!("Client wrote {} bytes and received {} bytes.", from_client, from_server);
-    Ok(())
-}
 
 fn host_addr(uri: &hyper::Uri) -> Option<String> {
     uri.authority().and_then(|auth| Some(auth.to_string()))
 }
 
-
-// Refactor this to mirror the clone_response() function above.
 async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
     let (parts, body) = request.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
@@ -326,6 +232,7 @@ async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request
 
 // "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
 // I don't think you can borrow as a reference, and it will be consumed when processing the body.
+// You need to extend the trait if it becomes a problem.
 async fn clone_response(mut response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
     let (parts, body) = response.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
