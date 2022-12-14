@@ -4,8 +4,13 @@
 #![allow(unused_mut)]
 #![allow(unused_assignments)]
 
-pub mod record;
-use record::record::*;
+pub mod model;
+use model::record::*;
+use crate::model::record::Record;
+
+pub mod data;
+use data::mongo::*;
+use crate::data::mongo::Mongo;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -38,7 +43,6 @@ use openssl::x509::{X509, X509Builder, X509NameBuilder};
 
 use flate2::read::GzDecoder;
 
-//
 // https://hyper.rs/guides/server/hello-world/
 // https://hyper.rs/guides/client/advanced/
 // https://tokio.rs/tokio/tutorial/async
@@ -46,7 +50,6 @@ use flate2::read::GzDecoder;
 // https://github.com/hyperium/hyper/issues/1884
 // https://github.com/omjadas/hudsucker/blob/main/src/certificate_authority/openssl_authority.rs
 // https://docs.rs/crate/openssl/latest/source/examples/mk_certs.rs
-//
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
