@@ -40,10 +40,6 @@ impl Mongo {
 
         let client = Client::with_options(client_options)?;
 
-        //for db_name in client.list_database_names(None, None).await? {
-        //    println!("{}", db_name);
-        //};
-
         Ok(client)
     }
 
@@ -53,7 +49,6 @@ impl Mongo {
         let mut db : Option<mongodb::Database> = None;  
         let mut dbs = HashMap::<String, Option<mongodb::Database>>::new();
         for db_name in client.list_database_names(None, None).await? {
-            //println!("{}", db_name);
             dbs.insert(db_name, None);
         };
 
@@ -74,9 +69,6 @@ impl Mongo {
         let filter = doc!{ };
         let mut collection : Option<mongodb::Collection<Record>> = None; 
         let collection_names = db.list_collection_names(filter).await?;
-        //for name in &collection_names {
-        //    println!("{}", name);
-        //}
 
         if collection_names.contains(&COLLECTION_NAME.to_string()) {
            collection = Some(db.collection::<Record>(COLLECTION_NAME));
@@ -85,7 +77,6 @@ impl Mongo {
             // so this method is not needed if no special ops are required.
             db.create_collection(COLLECTION_NAME, None).await?;
             collection = Some(db.collection::<Record>(COLLECTION_NAME));
-
         }
         Ok(collection.unwrap())
     }

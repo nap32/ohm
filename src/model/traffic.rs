@@ -11,14 +11,8 @@ use flate2::read::GzDecoder;
 use std::io::prelude;
 use std::io::Read;
 
-// #[derive(...)]
-// pub struct N {}
-// impl PartialEq for N { fn eq(&self, other:&Self) -> bool {...} }
-// impl Eq for N {}
-// impl N {}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Record {
+pub struct Traffic {
     pub method : String,
     pub scheme : String,
     pub host : String,
@@ -32,7 +26,7 @@ pub struct Record {
 
     pub version : String,
 }
-impl PartialEq for Record {
+impl PartialEq for Traffic {
     fn eq(&self, other: &Self) -> bool {
         (self.method == other.method) &&
             (self.scheme == other.scheme) &&
@@ -46,13 +40,13 @@ impl PartialEq for Record {
             (self.response_body == other.response_body)
     }
 }
-impl Eq for Record {}
-impl fmt::Display for Record {
+impl Eq for Traffic {}
+impl fmt::Display for Traffic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_json())
     }
 }
-impl Record {
+impl Traffic {
 
     pub async fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
         // thread 'tokio-runtime-worker' panicked at 'called `Option::unwrap()` on a `None` value',
