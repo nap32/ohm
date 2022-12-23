@@ -59,7 +59,18 @@ impl Record {
         // src/record/mod.rs:54:47 -> 55 w/ this comment -> query is 'None'.
         // Do we either set everything to Option(String) or do we parse and pass empty-string?
         let mut me = Self {
-            method : "GET".to_string(),
+            method : match *request.method() {
+                Method::GET => "GET".to_string(),
+                Method::PUT => "PUT".to_string(),
+                Method::POST => "POST".to_string(),
+                Method::HEAD => "HEAD".to_string(),
+                Method::PATCH => "PATCH".to_string(),
+                Method::TRACE => "TRACE".to_string(),
+                Method::DELETE => "DELETE".to_string(),
+                Method::OPTIONS => "OPTIONS".to_string(),
+                Method::CONNECT => "CONNECT".to_string(),
+                _ => "?".to_string(),
+            },
             scheme : request.uri().scheme().unwrap().to_string(),
             host : request.uri().host().unwrap().to_string(),
             path : request.uri().path().to_string(),
