@@ -2,6 +2,7 @@ use mongodb::{Client, Collection, Database, options::ClientOptions, bson::doc, o
 use futures::stream::TryStreamExt; // Trait required for cursor.try_next().
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use once_cell::sync::OnceCell;
 
 use crate::model::record::Record;
 
@@ -80,44 +81,48 @@ impl Mongo {
         }
         Ok(collection.unwrap())
     }
+}
 
-    pub async fn add_records(&mut self, records: Vec<Record>) -> Result<(), mongodb::error::Error> {
-        self.record_collection.insert_many(records, None).await?;
-        Ok(())
+pub async fn add_record(mongo : &Mongo, record: &Record) -> Result<(), mongodb::error::Error> {
+    mongo.record_collection.insert_one(record, None).await?;
+    Ok(())
+}
+
+pub async fn add_records(mongo : &Mongo, records: &Vec<Record>) -> Result<(), mongodb::error::Error> {
+    mongo.record_collection.insert_many(records, None).await?;
+    Ok(())
+}
+
+pub async fn get_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<Vec::<Record>, mongodb::error::Error> {
+
+    let mut results = Vec::<Record>::new();
+    //let find_options = FindOptions::builder().sort(doc!{ "method" : 1 }).build();
+    let mut cursor = mongo.record_collection.find(record_filter, None).await?;
+
+    while let Some(record) = cursor.try_next().await? {
+        results.push(record);
     }
 
-    pub async fn get_records(&mut self, record_filter : mongodb::bson::Document) -> Result<Vec::<Record>, mongodb::error::Error> {
+    Ok(results)
+}
 
-        let mut results = Vec::<Record>::new();
-        //let find_options = FindOptions::builder().sort(doc!{ "method" : 1 }).build();
-        let mut cursor = self.record_collection.find(record_filter, None).await?;
+pub async fn update_records(mongo : &Mongo, record_filter : mongodb::bson::Document, updates_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
+    mongo.record_collection.update_many(record_filter, updates_filter, None).await?;
+    Ok(())
+}
 
-        while let Some(record) = cursor.try_next().await? {
-            results.push(record);
-        }
+pub async fn delete_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
+    mongo.record_collection.delete_many(record_filter, None).await?;
+    Ok(())
+}
 
-        Ok(results)
-    }
+async fn drop_collection(mongo : &Mongo) -> Result<(), mongodb::error::Error> {
+    let _result = mongo.record_collection.drop(None).await?;
+    Ok(())
+}
 
-    pub async fn update_records(&mut self, record_filter : mongodb::bson::Document, updates_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
-        self.record_collection.update_many(record_filter, updates_filter, None).await?;
-        Ok(())
-    }
-
-    pub async fn delete_records(&mut self, record_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
-        self.record_collection.delete_many(record_filter, None).await?;
-        Ok(())
-    }
-
-    async fn drop_collection(&mut self) -> Result<(), mongodb::error::Error> {
-        let _result = self.record_collection.drop(None).await?;
-        Ok(())
-    }
-
-    async fn drop_database(&mut self) -> Result<(), mongodb::error::Error> {
-        let _options = mongodb::options::DropDatabaseOptions::builder().build();
-        let _result = self.db.drop(None).await?;
-        Ok(())
-    }
-
+async fn drop_database(mongo : &Mongo) -> Result<(), mongodb::error::Error> {
+    let _options = mongodb::options::DropDatabaseOptions::builder().build();
+    let _result = mongo.db.drop(None).await?;
+    Ok(())
 }

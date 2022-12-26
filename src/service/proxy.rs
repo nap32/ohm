@@ -1,5 +1,9 @@
+
+use crate::DATASTORE_CLIENT;
 use crate::service::ca::CA;
 use crate::model::record::Record;
+use crate::data::mongo::Mongo;
+use crate::add_record;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -124,10 +128,10 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
 
     let (mut response_traffic, mut response_record) = clone_response(response).await.unwrap();
     
-    // TODO -> Spawn new task here to decouple from this traffic flow?
     let record = Record::new(request_record, response_record).await;
     tokio::task::spawn(async move {
-        filter_record(record).await;
+        // process_record(record).await;
+        println!("{}", &record);
     });
 
     Ok(response_traffic)
@@ -139,10 +143,18 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
 //  truncating response bodies that exceed a certain length, parsing recognized
 //  patterns into their associated generic enum (INT, GUID, EMAIL, etc.).
 //
-pub async fn filter_record(record: Record) {
-    println!("{}", record);
+pub async fn process_record(record: Record) {
+    let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
+    let result = add_record(datastore, &record).await;
+    match result {
+        Ok(()) => {
+            println!("{}", &record);
+        },
+        Err(e) => {
+            println!("{:?}", e);
+        },
+    }
 }
-
 
 pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
     let (parts, body) = request.into_parts();

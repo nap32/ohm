@@ -20,6 +20,8 @@ use crate::service::ca::CA;
 use service::proxy::*;
 use service::filter::*;
 use crate::service::filter::FilterChain;
+use service::config::*;
+use crate::service::config::Config;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -50,7 +52,7 @@ use openssl::rand;
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::x509::{X509, X509Builder, X509NameBuilder};
 
-use flate2::read::GzDecoder;
+use once_cell::sync::OnceCell;
 
 // https://hyper.rs/guides/server/hello-world/
 // https://hyper.rs/guides/client/advanced/
@@ -62,8 +64,17 @@ use flate2::read::GzDecoder;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
+static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new();
+
 #[tokio::main]
 async fn main() { 
+
+    let config = Config::new().await;
+
+    match DATASTORE_CLIENT.set(Mongo::new().await) {
+        Ok(()) => (),
+        Err(e) => { panic!("Error setting OnceCell<Mongo>"); },
+    };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
