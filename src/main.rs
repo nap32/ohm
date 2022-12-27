@@ -25,10 +25,9 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::io::Read;
+use std::env;
 
 use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
-//use hyper::header::{HeaderMap, HeaderName, UPGRADE};
-//use hyper::body::HttpBody as _;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
 use hyper::server::conn::Http;
@@ -62,19 +61,22 @@ use once_cell::sync::OnceCell;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
+static CONFIG : OnceCell<Config> = OnceCell::new();
 static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new();
 
 #[tokio::main]
 async fn main() { 
 
-    let config = Config::new().await;
-
+    match CONFIG.set(Config::new(get_config_argument().await).await) {
+        Ok(()) => (),
+        Err(e) => { panic!("Error setting Config."); },
+    }
     match DATASTORE_CLIENT.set(Mongo::new().await) {
         Ok(()) => (),
         Err(e) => { panic!("Error setting OnceCell<Mongo>"); },
     };
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.get().unwrap().net.port));
 
     let make_svc = make_service_fn(|_conn| async {
         Ok::<_, Infallible>(service_fn(crate::service::proxy::handle_request))
@@ -90,13 +92,27 @@ async fn main() {
     }
 }
 
+async fn get_config_argument() -> String {
+    let args : Vec<String> = env::args().collect();
+    match args.len() {
+        1 => { // No config argument.
+            return "./config/config.toml".to_string();
+        },
+        2 => {
+            return args[2].to_string();
+        },
+        _ => {
+            panic!("Usage: ohm [path/to/custom/config/file]");
+        },
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Imports names from outer (for mod tests) scope.
+   use super::*;
     
    #[tokio::test]
-   async fn test_clone_response() -> Result<(), Error> {
+   async fn test_main() -> Result<(), Error> {
         Ok(())
    }
 }

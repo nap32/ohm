@@ -6,10 +6,7 @@ use once_cell::sync::OnceCell;
 
 use crate::model::record::Record;
 
-const DB_URL : &str = "mongodb://localhost:27017";
-const APP_NAME : &str = "Ohm";
-const DB_NAME : &str = "records";
-const COLLECTION_NAME : &str = "records";
+const APP_NAME : &str = "ohm";
 
 // Manage and store all datastore interactions.
 pub struct Mongo {
@@ -33,8 +30,11 @@ impl Mongo {
     }
 
     async fn get_connection() -> Result<mongodb::Client, mongodb::error::Error>{
+
+        let db_url = &crate::CONFIG.get().unwrap().db.db_url;
+
         // Parse a connection string into an options struct.
-        let mut client_options = ClientOptions::parse(DB_URL).await?;
+        let mut client_options = ClientOptions::parse(db_url).await?;
 
         // Manually set an option.
         client_options.app_name = Some(APP_NAME.to_string());
@@ -46,6 +46,8 @@ impl Mongo {
 
     async fn get_database(client : &mongodb::Client) -> Result<mongodb::Database, mongodb::error::Error>{
 
+        let db_name = &crate::CONFIG.get().unwrap().db.db_name;
+        
         // Get DBs.
         let mut db : Option<mongodb::Database> = None;  
         let mut dbs = HashMap::<String, Option<mongodb::Database>>::new();
@@ -54,12 +56,12 @@ impl Mongo {
         };
 
         // Check for 'records' DB, create if missing.
-        if dbs.contains_key(DB_NAME) && dbs.get(DB_NAME).is_some() {
-            db = Some(client.database(DB_NAME)); 
+        if dbs.contains_key(db_name) && dbs.get(db_name).is_some() {
+            db = Some(client.database(db_name)); 
         } else {
             // I think you can create a database with the same verbiage,
             // so this block is redundant.
-            db = Some(client.database(DB_NAME));
+            db = Some(client.database(db_name));
         }
         
         // If no value is here will throw an error via .unwrap(), and return E instead of V.
@@ -67,17 +69,20 @@ impl Mongo {
     }
 
     async fn get_collection(db : &mongodb::Database) -> Result<mongodb::Collection<Record>, mongodb::error::Error> {
+
+        let collection_name = &crate::CONFIG.get().unwrap().db.collection_name;
+
         let filter = doc!{ };
         let mut collection : Option<mongodb::Collection<Record>> = None; 
         let collection_names = db.list_collection_names(filter).await?;
 
-        if collection_names.contains(&COLLECTION_NAME.to_string()) {
-           collection = Some(db.collection::<Record>(COLLECTION_NAME));
+        if collection_names.contains(&collection_name.to_string()) {
+           collection = Some(db.collection::<Record>(collection_name));
         } else {
             // Note mongoDB creates collections implicitly when data is inserted,
             // so this method is not needed if no special ops are required.
-            db.create_collection(COLLECTION_NAME, None).await?;
-            collection = Some(db.collection::<Record>(COLLECTION_NAME));
+            db.create_collection(collection_name, None).await?;
+            collection = Some(db.collection::<Record>(collection_name));
         }
         Ok(collection.unwrap())
     }

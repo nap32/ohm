@@ -1,31 +1,40 @@
-use serde_yaml;
+use serde::{Serialize, Deserialize};
+use toml::Value;
 
+#[derive(Serialize, Deserialize)]
 pub struct Config {
-    // SERVER
-    port                : i32,
-    // CA
-    pem_relative_path   : String,
-    key_relative_path   : String,
-    // DATA
-    db_url : String,
-    app_name : String,
-    db_name : String,
-    collection_name : String,
+    pub net : Net,
+    pub ca : Ca,
+    pub db : Db,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Net {
+    pub port : u16,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Ca {
+    pub pem_relative_path : String,
+    pub key_relative_path : String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Db {
+    pub db_url : String,
+    pub app_name : String,
+    pub db_name : String,
+    pub collection_name : String,
 }
 
 impl Config {
-    pub async fn new() -> Self {
+    pub async fn new(config_path : String) -> Self {
+        let config_string = std::fs::read_to_string(config_path).unwrap();
+        let config_toml : Config = toml::from_str(&config_string).unwrap();
         Self {
-            // SERVER
-            port : 8080,
-            // CA
-            pem_relative_path : "../../ca/ohm.pem".to_string(),
-            key_relative_path : "../../ca/ohm.key".to_string(),
-            // DATA
-            db_url : "mongodb://localhost:27017".to_string(),
-            app_name : "Ohm".to_string(),
-            db_name : "records".to_string(),
-            collection_name : "records".to_string(),
+            net : config_toml.net,
+            ca : config_toml.ca,
+            db : config_toml.db,
         }
     }
 }

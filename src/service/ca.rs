@@ -14,9 +14,6 @@ use openssl::rand;
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::x509::{X509, X509Builder, X509NameBuilder};
 
-const KEY_RELATIVE_PATH : &[u8] = include_bytes!("../../ca/ohm.key");
-const PEM_RELATIVE_PATH : &[u8] = include_bytes!("../../ca/ohm.pem");
-
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct CA {
@@ -27,9 +24,9 @@ pub struct CA {
 impl CA {
 
     pub async fn new() -> Self {
-        let private_key_bytes: &[u8] = KEY_RELATIVE_PATH;
+        let private_key_bytes: &[u8] = &std::fs::read(&crate::CONFIG.get().unwrap().ca.key_relative_path).unwrap();
         let pkey = PKey::private_key_from_pem(private_key_bytes).expect("Failed to parse private key");
-        let ca_cert_bytes: &[u8] = PEM_RELATIVE_PATH;
+        let ca_cert_bytes: &[u8] = &std::fs::read(&crate::CONFIG.get().unwrap().ca.pem_relative_path).unwrap();
         let cert = X509::from_pem(ca_cert_bytes).expect("Failed to parse CA certificate pem.");
 
         Self {
