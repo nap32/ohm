@@ -39,20 +39,20 @@ docker run --name ohm-mongo -d -p 127.0.0.1:27017:27017 mongo
 Third, you'll need to modify `config.yaml` to specify the correct details relating to your certificate locations and database instance.
 
 # Usage
-
-Once Ohm is up-and-running, the proxy satisfies a powerful means to ingest browser traffic as persistent records into a data store.
-
-Without too much effort, using the database solution's tooling provides a local logging mechanism.
-By leveraging existing knowledge of queries, you can quickly answer questions such as:
+\
+Once Ohm is up-and-running, the proxy satisfies a powerful means to ingest browser traffic as persistent records into a data store.\
+\
+Without too much effort, using the database solution's tooling provides a local logging mechanism.\
+By leveraging existing knowledge of queries, you can quickly answer questions such as:\
     - "What routes have I enumerated for this API?"
     - "How many services do I know about?"
     - "Do I know of any applications using this potentially problematic header?"
-
-Through consistent use, you'll build up more complete information over time without needing to maintain the traffic in notes or navigate intercepting proxy traffic history.
-
-This is not the only value that Ohm can provide, as the database's resulting collection of traffic records provides a flexible interface to streamline automation efforts.
-Ohm is designed to avoid introducing undesirable domain-specific languages or interface definition languages and instead offer the flexibility for its users to leverage database solutions.
-You can tailor your tooling to your specific use-case or workload - potential ideas to consider include:
+\
+Through consistent use, you'll build up more complete information over time without needing to maintain the traffic in notes or navigate intercepting proxy traffic history.\
+\
+This is not the only value that Ohm can provide, as the database's resulting collection of traffic records provides a flexible interface to streamline automation efforts.\
+Ohm is designed to avoid introducing undesirable domain-specific languages or interface definition languages and instead offer the flexibility for its users to leverage database solutions.\
+You can tailor your tooling to your specific use-case or workload - potential ideas to consider include:\
     - Using event triggers native to the database enables filtering of traffic containing plaintext credentials sent to your identity provider as logins occur.
     - Using event triggers to filter traffic in response to a new push to the record's traffic array can allow you to drop documents in the collection you don't care about - like images, .js/.ts, google analytics, etc.
     - Using event triggers, you can de-duplicate records that are similar by means of path variables to condense records with user emails, GUIDs/UUIDs, or numbers to an abstracted generic representation.
@@ -60,19 +60,33 @@ You can tailor your tooling to your specific use-case or workload - potential id
     - You can implement extensions to the 'record' document to provide a field that functions as an array of labels/tags/URLs to organize reporting or couple endpoints with JIRA tickets.
     - You can implement extensions to the 'record' document to provide a field that couples note-taking directly with the information it concerns.
     - You can implement extensions to the 'record' document to provide an embedded document field containing the relevant information to automate generating a new token via OAuth2 through a known identity provider.
+\
+Rather than include solutions to some or all of the suggestions above in rigid application-level logic, Ohm is a one trick pony -\
+Listen to and record 'all the things' into a format that's reused across the rest of a user's/team's ecosystem.\
+This avoids enforcing opinions on how to use the traffic and instead offers the user the opportunity to come up with their own solutions.\
 
-Rather than include solutions to some or all of the suggestions above in rigid application-level logic, Ohm is a one trick pony -
-Listen to and record 'all the things' into a format that's reused across the rest of a user's/team's ecosystem.
-This avoids enforcing opinions on how to use the traffic and instead offers the user the opportunity to come up with their own solutions.
+# Warning!
+
+Ohm does not prevent the user from misconfiguring or exposing secrets during usage.
+Several mistakes can be made in setup that result in a security issue:
+
+    1. If you're testing the tool and stand up a database container locally, make sure you bind it to the local interface to prevent yourself from offering traffic to your LAN or WAN.
+    2. If you don't have event triggers to handle records generated for the identity providers used to login, you'll expose the username and passwords used to login to anyone with access to the data.
+    3. If you don't setup your datastore with authentication, you're hosting traffic containing session tokens to anyone who can interface with the datastore.
+    4. It would be wise to encrypt the datastore at rest to prevent leaking sensitive information - credentials, PII, internal-only services.
+
+The list above is not exhaustive.
+The user is responsible for securing their own local environment.
+Ohm and it's maintainer(s) accept no responsibility for issues caused through its use.
 
 # Thanks
 
 Ohm is inspired by or has benefitted from the ideas or code contained in the following projects:
-- https://github.com/mitmproxy/mitmproxy
-- https://github.com/omjadas/hudsucker
-- https://github.com/
-- https://github.com/tokio-rs/tokio
-- https://github.com/hyperium/hyper
+    - https://github.com/mitmproxy/mitmproxy
+    - https://github.com/omjadas/hudsucker
+    - https://github.com/
+    - https://github.com/tokio-rs/tokio
+    - https://github.com/hyperium/hyper
 
 In addition, many other libaries enable Ohm to function. Check out the `Cargo.toml` for a complete list of dependencies.
 Thank you!
