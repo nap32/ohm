@@ -2,8 +2,8 @@
 use crate::DATASTORE_CLIENT;
 use crate::service::ca::CA;
 use crate::model::record::Record;
+use crate::model::traffic::Traffic;
 use crate::data::mongo::Mongo;
-use crate::add_record;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -117,38 +117,36 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
 
-    let (mut request_traffic, mut request_record) = clone_request(request).await.unwrap();
+    let (mut request_browser, mut request_traffic) = clone_request(request).await.unwrap();
 
-    let mut result = client.request(request_traffic).await;
+    let mut result = client.request(request_browser).await;
     let mut response = Response::default();
     match result {
         Ok(t) => { response = t; },
         Err(e) => { println!("Err! {}", e); },
     }
 
-    let (mut response_traffic, mut response_record) = clone_response(response).await.unwrap();
+    let (mut response_browser, mut response_traffic) = clone_response(response).await.unwrap();
     
-    let record = Record::new(request_record, response_record).await;
+    let traffic = Traffic::new(request_traffic, response_traffic).await;
     tokio::task::spawn(async move {
-        // process_record(record).await;
-        println!("{}", &record);
+        process_traffic(&traffic).await;
+        //println!("{}", &traffic);
     });
 
-    Ok(response_traffic)
+    Ok(response_browser)
 }
 
-//
-//  The intention is to set up a 'chain' of filtering functions to 'normalize'
-//  traffic into a Record format. This includes dropping errata (.js files),
-//  truncating response bodies that exceed a certain length, parsing recognized
-//  patterns into their associated generic enum (INT, GUID, EMAIL, etc.).
-//
-pub async fn process_record(record: Record) {
+pub async fn process_traffic(traffic: &Traffic) {
+    store_data(traffic).await;
+}
+
+pub async fn store_data(traffic: &Traffic) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    let result = add_record(datastore, &record).await;
+    let result = crate::data::mongo::upsert_traffic(datastore, &traffic).await;
     match result {
         Ok(()) => {
-            println!("{}", &record);
+            println!("{}", &traffic);
         },
         Err(e) => {
             println!("{:?}", e);

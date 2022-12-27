@@ -1,4 +1,4 @@
-use mongodb::{Client, Collection, Database, options::ClientOptions, bson::doc, options::FindOptions};
+use mongodb::{Client, Collection, Database, options::ClientOptions, bson::doc, options::FindOptions, options::UpdateOptions};
 use futures::stream::TryStreamExt; // Trait required for cursor.try_next().
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -83,17 +83,25 @@ impl Mongo {
     }
 }
 
-pub async fn add_record(mongo : &Mongo, record: &Record) -> Result<(), mongodb::error::Error> {
+pub async fn upsert_traffic(mongo : &Mongo, traffic : &crate::Traffic) -> Result<(), mongodb::error::Error> {
+    let record_filter = doc!{ "method": traffic.method.clone(), "host": traffic.host.clone(), "path": traffic.path.clone() };
+    let updates = doc!{ "$push": { "traffic": traffic.get_json() } };
+    let upsert_options = UpdateOptions::builder().upsert(true).build();
+    mongo.record_collection.update_one(record_filter, updates, upsert_options).await?;
+    Ok(())
+}
+
+async fn add_record(mongo : &Mongo, record: &Record) -> Result<(), mongodb::error::Error> {
     mongo.record_collection.insert_one(record, None).await?;
     Ok(())
 }
 
-pub async fn add_records(mongo : &Mongo, records: &Vec<Record>) -> Result<(), mongodb::error::Error> {
+async fn add_records(mongo : &Mongo, records: &Vec<Record>) -> Result<(), mongodb::error::Error> {
     mongo.record_collection.insert_many(records, None).await?;
     Ok(())
 }
 
-pub async fn get_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<Vec::<Record>, mongodb::error::Error> {
+async fn get_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<Vec::<Record>, mongodb::error::Error> {
 
     let mut results = Vec::<Record>::new();
     //let find_options = FindOptions::builder().sort(doc!{ "method" : 1 }).build();
@@ -106,12 +114,13 @@ pub async fn get_records(mongo : &Mongo, record_filter : mongodb::bson::Document
     Ok(results)
 }
 
-pub async fn update_records(mongo : &Mongo, record_filter : mongodb::bson::Document, updates_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
+async fn update_records(mongo : &Mongo, record_filter : mongodb::bson::Document, updates_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
     mongo.record_collection.update_many(record_filter, updates_filter, None).await?;
     Ok(())
 }
 
-pub async fn delete_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
+
+async fn delete_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
     mongo.record_collection.delete_many(record_filter, None).await?;
     Ok(())
 }

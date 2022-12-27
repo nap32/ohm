@@ -18,8 +18,6 @@ pub mod service;
 use service::ca::*;
 use crate::service::ca::CA;
 use service::proxy::*;
-use service::filter::*;
-use crate::service::filter::FilterChain;
 use service::config::*;
 use crate::service::config::Config;
 
