@@ -1,4 +1,4 @@
-# About
+ About
 
 Ω Ω Ω Ω Ω Ω Ω Ω Ω Ω
 
@@ -44,15 +44,17 @@ Once Ohm is up-and-running, the proxy satisfies a powerful means to ingest brows
 \
 Without too much effort, using the database solution's tooling provides a local logging mechanism.\
 By leveraging existing knowledge of queries, you can quickly answer questions such as:\
+
     * "What routes have I enumerated for this API?"
     * "How many services do I know about?"
     * "Do I know of any applications using this potentially problematic header?"
-\
+
 Through consistent use, you'll build up more complete information over time without needing to maintain the traffic in notes or navigate intercepting proxy traffic history.\
 \
 This is not the only value that Ohm can provide, as the database's resulting collection of traffic records provides a flexible interface to streamline automation efforts.\
 Ohm is designed to avoid introducing undesirable domain-specific languages or interface definition languages and instead offer the flexibility for its users to leverage database solutions.\
 You can tailor your tooling to your specific use-case or workload - potential ideas to consider include:\
+
     * Using event triggers native to the database enables filtering of traffic containing plaintext credentials sent to your identity provider as logins occur.\
     * Using event triggers to filter traffic in response to a new push to the record's traffic array can allow you to drop documents in the collection you don't care about - like images, .js/.ts, google analytics, etc.\
     * Using event triggers, you can de-duplicate records that are similar by means of path variables to condense records with user emails, GUIDs/UUIDs, or numbers to an abstracted generic representation.\
@@ -60,7 +62,7 @@ You can tailor your tooling to your specific use-case or workload - potential id
     * You can implement extensions to the 'record' document to provide a field that functions as an array of labels/tags/URLs to organize reporting or couple endpoints with JIRA tickets.\
     * You can implement extensions to the 'record' document to provide a field that couples note-taking directly with the information it concerns.\
     * You can implement extensions to the 'record' document to provide an embedded document field containing the relevant information to automate generating a new token via OAuth2 through a known identity provider.\
-\
+
 Rather than include solutions to some or all of the suggestions above in rigid application-level logic, Ohm is a one trick pony -\
 Listen to and record 'all the things' into a format that's reused across the rest of a user's/team's ecosystem.\
 This avoids enforcing opinions on how to use the traffic and instead offers the user the opportunity to come up with their own solutions.\
@@ -82,11 +84,12 @@ Ohm and it's maintainer(s) accept no responsibility for issues caused through it
 # Thanks
 
 Ohm is inspired by or has benefitted from the ideas or code contained in the following projects:\
+
     * https://github.com/mitmproxy/mitmproxy
     * https://github.com/omjadas/hudsucker
     * https://github.com/
     * https://github.com/tokio-rs/tokio
     * https://github.com/hyperium/hyper
-\
+
 In addition, many other libaries enable Ohm to function. Check out the `Cargo.toml` for a complete list of dependencies.\
 Thank you!\
