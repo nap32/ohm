@@ -1,4 +1,4 @@
- About
+# About
 
 Ω Ω Ω Ω Ω Ω Ω Ω Ω Ω
 
@@ -7,6 +7,16 @@ Ohm is an intercepting proxy designed to passively parse request-response pairs 
 Ohm is written in rust using the powerful tokio asynchronous runtime engine and leveraging hyper as an HTTP library.\
 \
 As a result, Ohm is a fast and memory-safe asynchronous HTTP / HTTPS intercepting proxy.\
+
+### Features
+
+- HTTP/HTTPS Intercepting Proxy
+- Supports multiple major databases - Mongo, Postgres, and Redis; store your data in your preferred format.
+- Works in tandem with existing intercepting proxies.
+- Leverage database feature-rich ecosystems to manage your traffic history.
+- Designed as a passive proxy - processing records spawned as a seperate thread/task and traffic returned to the user without synchronous blocking.
+- Designed in a memory-safe way.
+- Ohm is fast.
 
 # Setup
 
@@ -67,6 +77,28 @@ Rather than include solutions to some or all of the suggestions above in rigid a
 Listen to and record 'all the things' into a format that's reused across the rest of a user's/team's ecosystem.\
 This avoids enforcing opinions on how to use the traffic and instead offers the user the opportunity to come up with their own solutions.\
 
+# Chaining Proxies w/ Ohm
+
+Ohm is capable of working in tandem with another proxy solution.\
+Ohm will unintrusively passively collect and write traffic to the database, including any modifications your downstream proxy might make.\
+This gives you the best of both worlds - existing workflows using another proxy solution are unimpacted and you can still collect and persist traffic to a database.\
+While the setup might be specific to the individual proxy(chain), common intercepting proxy examples are detailed below:\
+
+### mitmproxy
+
+Configure the browser to point to mitmproxy as you normally would.\
+Update the configuration file of Ohm to ensure both proxies don't attempt to listen to the same port.\
+Run mitmproxy with an upstream flag:\
+
+```
+mitmproxy --upstream=http://127.0.0.1:8085
+```
+
+If you use an `https://` scheme instead of `http://`, mitmproxy will complain that the upstream server doesn't speak TLS.\
+This issue will be triaged and addressed, it is currently in the backlog.\
+Be sure to restrict to the local interface and appropriately lock down.\
+Consider namespaces or putting everything behind a docker network so only Mitmproxy and Ohm are on a LAN.\
+
 # Warning!
 
 Ohm does not prevent the user from misconfiguring or exposing secrets during usage.\
@@ -92,4 +124,4 @@ Ohm is inspired by or has benefitted from the ideas or code contained in the fol
     * https://github.com/hyperium/hyper
 
 In addition, many other libaries enable Ohm to function. Check out the `Cargo.toml` for a complete list of dependencies.\
-Thank you!\
+Thank you!
