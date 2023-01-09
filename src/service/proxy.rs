@@ -4,6 +4,7 @@ use crate::service::ca::CA;
 use crate::model::record::Record;
 use crate::model::traffic::Traffic;
 use crate::data::mongo::Mongo;
+use crate::data::Datastore;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -131,7 +132,6 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
     let traffic = Traffic::new(request_traffic, response_traffic).await;
     tokio::task::spawn(async move {
         process_traffic(&traffic).await;
-        //println!("{}", &traffic);
     });
 
     Ok(response_browser)
@@ -143,7 +143,7 @@ pub async fn process_traffic(traffic: &Traffic) {
 
 pub async fn store_data(traffic: &Traffic) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    let result = crate::data::mongo::upsert_traffic(datastore, &traffic).await;
+    let result = datastore.add_traffic(&traffic).await;
     match result {
         Ok(()) => {
             println!("{}", &traffic);

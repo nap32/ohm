@@ -1,18 +1,31 @@
 
 use crate::model::record::Record;
 use crate::model::traffic::Traffic;
+use crate::data::Datastore;
 
 use tokio_postgres::Error;
 use postgres_openssl::MakeTlsConnector;
 use openssl::ssl::{SslConnector, SslMethod};
+use async_trait::async_trait;
+use std::collections::HashMap;
 
 pub struct Postgres {
+    pub client : tokio_postgres::Client,
+}
 
+#[async_trait]
+impl Datastore for Postgres {
+    async fn add_traffic(&self, traffic : &crate::Traffic) -> Result<(), Box<dyn std::error::Error>> {
+        match self.insert_traffic(traffic).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(e)),
+        }
+    }
 }
 
 impl Postgres {
 
-    pub async fn new() -> Result<(), tokio_postgres::Error> {
+    pub async fn new() -> Self {
         let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
         builder.set_ca_file("database_cert.pem").unwrap();
         let connector = MakeTlsConnector::new(builder.build());
@@ -20,14 +33,17 @@ impl Postgres {
             "host=localhost user=postgres sslmode=require",
             connector,
         );
-        let (client, connection) = connect_future.await?;
+
+        let (client, connection) = connect_future.await.unwrap();
         tokio::spawn(async move {
             if let Err(e) = connection.await {
                 eprintln!("Connection error: {}", e);
             }
         });
-        // Set the client somewhere.
-        Ok(())
+
+        Self {
+            client
+        }
     }
 
     pub async fn create_table(client: tokio_postgres::Client) -> Result<(), tokio_postgres::Error> {
@@ -48,25 +64,35 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn query_traffic(client: tokio_postgres::Client) -> Result<(), tokio_postgres::Error> {
-        let name = "Foobar";
-        let data = None::<&[u8]>;
-
-        for row in client.query("SELECT id, name, data FROM person", &[]).await? {
-            let id: i32 = row.get(0);
-            let name: &str = row.get(1);
-            let data: Option<&[u8]> = row.get(2);
-            println!("found person: {} {} {:?}", id, name, data);
-        }
-
-        Ok(())
-    }
-
-    pub async fn insert_traffic(client: tokio_postgres::Client, traffic: Traffic) -> Result<(), tokio_postgres::Error> {
-        client.execute(
-            "INSERT INTO traffic (method, scheme, host, path, query, request_headers, request_body, response_headers, response_body, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10))",
-            &[&traffic.method, &traffic.scheme, &traffic.host, &traffic.path, &traffic.query, &traffic.request_headers[&"Host".to_string()], &traffic.request_body, &traffic.response_headers[&"Host".to_string()], &traffic.response_body, &traffic.status.to_string() ],
+    pub async fn insert_traffic(&self, traffic: &Traffic) -> Result<(), tokio_postgres::Error> {
+        // '{ { KEY, VAL }, { KEY, VAL } , { KEY, VAL } }' to insert array - utility function used.
+        self.client.execute(
+            "INSERT INTO traffic (method, scheme, host, path, query, request_headers, request_body, response_headers, response_body, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            &[  &traffic.method,
+                &traffic.scheme,
+                &traffic.host,
+                &traffic.path,
+                &traffic.query,
+                &Postgres::prepare_tuple_array(&traffic.request_headers).await.unwrap(),
+                &traffic.request_body,
+                &Postgres::prepare_tuple_array(&traffic.response_headers).await.unwrap(),
+                &traffic.response_body,
+                &traffic.status.to_string()
+            ],
         ).await?;
         Ok(())
     }
+
+    pub async fn prepare_tuple_array(tuple_array: &HashMap<String, String>) -> Result<String, std::io::Error> {
+        let mut prepared_string = String::new();
+        prepared_string.push('{');
+        for (key, value) in tuple_array.iter() {
+            // '{' and '}' need escaped by doubles - "{{" and "}}". Alternative is r###"foobar"###.
+            prepared_string.push_str(format!("{{{},{}}}", key, value).as_str());
+        }
+        prepared_string.push('}');
+        Ok(prepared_string)
+    }
+
 }
+

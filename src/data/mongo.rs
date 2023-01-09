@@ -3,8 +3,10 @@ use futures::stream::TryStreamExt; // Trait required for cursor.try_next().
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use once_cell::sync::OnceCell;
+use async_trait::async_trait;
 
 use crate::model::record::Record;
+use crate::data::Datastore;
 
 const APP_NAME : &str = "ohm";
 
@@ -13,6 +15,16 @@ pub struct Mongo {
     connection : mongodb::Client,
     db : mongodb::Database,
     record_collection : mongodb::Collection<Record>,
+}
+
+#[async_trait]
+impl Datastore for Mongo {
+    async fn add_traffic(&self, traffic : &crate::Traffic) -> Result<(), Box<dyn std::error::Error>> {
+        match self.upsert_traffic(&traffic).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(Box::new(e)),
+        }
+    }
 }
 
 impl Mongo {
@@ -35,36 +47,15 @@ impl Mongo {
 
         // Parse a connection string into an options struct.
         let mut client_options = ClientOptions::parse(db_url).await?;
-
-        // Manually set an option.
         client_options.app_name = Some(APP_NAME.to_string());
-
         let client = Client::with_options(client_options)?;
 
         Ok(client)
     }
 
     async fn get_database(client : &mongodb::Client) -> Result<mongodb::Database, mongodb::error::Error>{
-
         let db_name = &crate::CONFIG.get().unwrap().db.db_name;
-        
-        // Get DBs.
-        let mut db : Option<mongodb::Database> = None;  
-        let mut dbs = HashMap::<String, Option<mongodb::Database>>::new();
-        for db_name in client.list_database_names(None, None).await? {
-            dbs.insert(db_name, None);
-        };
-
-        // Check for 'records' DB, create if missing.
-        if dbs.contains_key(db_name) && dbs.get(db_name).is_some() {
-            db = Some(client.database(db_name)); 
-        } else {
-            // I think you can create a database with the same verbiage,
-            // so this block is redundant.
-            db = Some(client.database(db_name));
-        }
-        
-        // If no value is here will throw an error via .unwrap(), and return E instead of V.
+        let db = Some(client.database(db_name)); 
         Ok(db.unwrap())
     }
 
@@ -86,57 +77,12 @@ impl Mongo {
         }
         Ok(collection.unwrap())
     }
-}
 
-pub async fn upsert_traffic(mongo : &Mongo, traffic : &crate::Traffic) -> Result<(), mongodb::error::Error> {
-    let record_filter = doc!{ "method": traffic.method.clone(), "host": traffic.host.clone(), "path": traffic.path.clone() };
-    let updates = doc!{ "$push": { "traffic": traffic.get_json() } };
-    let upsert_options = UpdateOptions::builder().upsert(true).build();
-    mongo.record_collection.update_one(record_filter, updates, upsert_options).await?;
-    Ok(())
-}
-
-async fn add_record(mongo : &Mongo, record: &Record) -> Result<(), mongodb::error::Error> {
-    mongo.record_collection.insert_one(record, None).await?;
-    Ok(())
-}
-
-async fn add_records(mongo : &Mongo, records: &Vec<Record>) -> Result<(), mongodb::error::Error> {
-    mongo.record_collection.insert_many(records, None).await?;
-    Ok(())
-}
-
-async fn get_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<Vec::<Record>, mongodb::error::Error> {
-
-    let mut results = Vec::<Record>::new();
-    //let find_options = FindOptions::builder().sort(doc!{ "method" : 1 }).build();
-    let mut cursor = mongo.record_collection.find(record_filter, None).await?;
-
-    while let Some(record) = cursor.try_next().await? {
-        results.push(record);
+    pub async fn upsert_traffic(&self, traffic : &crate::Traffic) -> Result<(), mongodb::error::Error> {
+        let record_filter = doc!{ "method": traffic.method.clone(), "host": traffic.host.clone(), "path": traffic.path.clone() };
+        let updates = doc!{ "$push": { "traffic": traffic.get_json() } };
+        let upsert_options = UpdateOptions::builder().upsert(true).build();
+        self.record_collection.update_one(record_filter, updates, upsert_options).await?;
+        Ok(())
     }
-
-    Ok(results)
-}
-
-async fn update_records(mongo : &Mongo, record_filter : mongodb::bson::Document, updates_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
-    mongo.record_collection.update_many(record_filter, updates_filter, None).await?;
-    Ok(())
-}
-
-
-async fn delete_records(mongo : &Mongo, record_filter : mongodb::bson::Document) -> Result<(), mongodb::error::Error> {
-    mongo.record_collection.delete_many(record_filter, None).await?;
-    Ok(())
-}
-
-async fn drop_collection(mongo : &Mongo) -> Result<(), mongodb::error::Error> {
-    let _result = mongo.record_collection.drop(None).await?;
-    Ok(())
-}
-
-async fn drop_database(mongo : &Mongo) -> Result<(), mongodb::error::Error> {
-    let _options = mongodb::options::DropDatabaseOptions::builder().build();
-    let _result = mongo.db.drop(None).await?;
-    Ok(())
 }

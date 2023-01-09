@@ -11,6 +11,7 @@ use model::traffic::*;
 use crate::model::traffic::Traffic;
 
 pub mod data;
+use crate::data::Datastore;
 use data::mongo::*;
 use crate::data::mongo::Mongo;
 
@@ -62,7 +63,7 @@ use once_cell::sync::OnceCell;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 static CONFIG : OnceCell<Config> = OnceCell::new();
-static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new();
+static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new(); 
 
 #[tokio::main]
 async fn main() { 
@@ -86,6 +87,8 @@ async fn main() {
         .http1_preserve_header_case(true)
         .http1_title_case_headers(true)
         .serve(make_svc);
+
+    println!("[ohm] Serving on 127.0.0.1:{}...", CONFIG.get().unwrap().net.port);
 
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
