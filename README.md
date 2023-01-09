@@ -91,7 +91,7 @@ Update the configuration file of Ohm to ensure both proxies don't attempt to lis
 Run mitmproxy with an upstream flag:\
 
 ```
-mitmproxy --upstream=http://127.0.0.1:8085
+mitmproxy --mode upstream:http://127.0.0.1:8085
 ```
 
 If you use an `https://` scheme instead of `http://`, mitmproxy will complain that the upstream server doesn't speak TLS.\

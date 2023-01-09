@@ -20,7 +20,8 @@ impl Datastore for Redis {
 }
 impl Redis {
     pub async fn new() -> Self {
-        let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+        let db_url = &crate::CONFIG.get().unwrap().db.db_url;
+        let client = redis::Client::open(db_url.clone()).unwrap();
         let mut conn = client.get_connection().unwrap();
         Self {
             client,

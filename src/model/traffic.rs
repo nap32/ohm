@@ -49,9 +49,6 @@ impl fmt::Display for Traffic {
 impl Traffic {
 
     pub async fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
-        // thread 'tokio-runtime-worker' panicked at 'called `Option::unwrap()` on a `None` value',
-        // src/record/mod.rs:54:47 -> 55 w/ this comment -> query is 'None'.
-        // Do we either set everything to Option(String) or do we parse and pass empty-string?
         let mut me = Self {
             method : match *request.method() {
                 Method::GET => "GET".to_string(),
@@ -68,7 +65,6 @@ impl Traffic {
             scheme : request.uri().scheme().unwrap().to_string(),
             host : request.uri().host().unwrap().to_string(),
             path : request.uri().path().to_string(),
-            //query : request.uri().query().unwrap().to_string(),
             query : match request.uri().query(){
                 Some(q) => q.to_string(),
                 None => "".to_string(),

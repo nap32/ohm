@@ -5,10 +5,9 @@
 #![allow(unused_assignments)]
 
 pub mod model;
-use model::record::*;
 use crate::model::record::Record;
-use model::traffic::*;
 use crate::model::traffic::Traffic;
+use crate::model::auth::AuthInfo;
 
 pub mod data;
 use crate::data::Datastore;
