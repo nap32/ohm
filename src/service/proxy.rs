@@ -138,7 +138,13 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
 }
 
 pub async fn process_traffic(traffic: &Traffic) {
+    //filter_traffic(traffic).await;
     store_data(traffic).await;
+}
+
+pub async fn filter_traffic(traffic: &Traffic) -> Option<Traffic> {
+
+    None
 }
 
 pub async fn store_data(traffic: &Traffic) {
@@ -207,21 +213,4 @@ pub async fn clone_response(mut response: Response<Body>) -> Result<(Response<Bo
     let res2 = res2.body(Body::from(body_bytes.clone()))?;
 
     return Ok((res1, res2))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[tokio::test]
-    async fn test_clone_response() -> Result<(), Error> {
-        //     let mut response = Response::builder()
-        //         .status(200)
-        //         .version(hyper::Version::HTTP_11)
-        //         .header(hyper::header::HOST, "Foobar")
-        //         .body(Body::from("foobar"));
-        //     let (response_foo, response_bar) = clone_response(response).await().unwrap();
-        //     assert_eq!(response_foo.to_bytes(), response_bar.to_bytes());
-        Ok(())
-    }
 }

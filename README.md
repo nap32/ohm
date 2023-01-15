@@ -4,7 +4,7 @@
 
 Ohm is an intercepting proxy designed to passively parse request-response pairs into a common format and update/insert to a database.\
 \
-Ohm is written in rust using the powerful tokio asynchronous runtime engine and leveraging hyper as an HTTP library.\
+Ohem is written in rust using the powerful tokio asynchronous runtime engine and leveraging hyper as an HTTP library.\
 \
 As a result, Ohm is a fast and memory-safe asynchronous HTTP / HTTPS intercepting proxy.\
 
@@ -17,6 +17,24 @@ As a result, Ohm is a fast and memory-safe asynchronous HTTP / HTTPS interceptin
 - Designed as a passive proxy - processing records spawned as a seperate thread/task and traffic returned to the user without synchronous blocking.
 - Designed in a memory-safe way.
 - Ohm is fast.
+
+### Design Decisions
+
+##### Decompression of response bodies happens by default.
+While the intention was to store traffic as-is to keep it usage flexible,
+in usage it became clear that storing encoded bodies to the datastore
+prevented effective queries relating to response body contents. \
+
+##### Application-level mechanism for filtering.
+The original intention was to leverage datastore event triggers to filter traffic.
+The hope was to avoid defining an interface whose syntax needed memorized.
+There are a couple of issues with this approach -
+1. Not every datastore has event triggers or is capable of filtering traffic on write.
+2. A multi-user datastore would leak issuer traffic and session tokens.
+
+To compromise, Ohm sets up a minimal filtering chain interface that can be extended in configuration or source.
+This enables the ability to configure behavior of the filters without recompiling from source.
+Where more advanced filtering behavior is needed, you can write another function or use downstream mechanisms like event triggers.
 
 # Setup
 
