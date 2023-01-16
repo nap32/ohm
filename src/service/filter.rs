@@ -7,45 +7,55 @@ use flate2::{read::GzDecoder, read::DeflateDecoder, Decompress};
 use brotli::Decompressor;
 
 pub struct Filter {
-//    filters: Vec<fn(&self, &mut Traffic) -> Result<&mut Traffic, std::io::Error> > 
+    filters: Vec<fn(&mut Traffic) -> Result<&mut Traffic, std::io::Error> > 
 }
 
 impl Filter {
-//    pub async fn filter(&self, traffic: &mut Traffic) -> Result<&mut Traffic, std::io::Error> { 
-//        for f in &self.filters {
-//            println!("{}", &self.(f)(traffic));
-//        }
-//    }
+    pub async fn filter(&self, traffic: &mut Traffic) -> Result<(), ()> { 
+        for function in &self.filters {
+            match (function)(traffic){
+                Ok(_) => { continue },
+                Err(e) => { return Err(()) },
+            }
+        }
+        Ok(())
+    }
 }
 
 // gzip, br, deflate only.
 
-pub async fn decompress_gzip(traffic: &mut Traffic) -> Result<&mut Traffic, std::io::Error> {
+pub async fn decompress_gzip(traffic: &mut Traffic) -> Result<(), std::io::Error> {
+    if !(traffic.response_headers.contains_key("content-encoding")){
+        return Ok(())
+    }
+    if !(traffic.response_headers["content-encoding"] == "gzip".to_string()){
+        return Ok(())
+    }
     let mut encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new(); 
     let mut gz = GzDecoder::new(&encoded_body[..]);
     gz.read_to_end(&mut decoded_buffer).unwrap();
     traffic.response_body = decoded_buffer.clone();
-    Ok(traffic)
+    Ok(())
 }
 
-pub async fn decompress_deflate(traffic: &mut Traffic) -> Result<&mut Traffic, std::io::Error> {
+pub async fn decompress_deflate(traffic: &mut Traffic) -> Result<(), std::io::Error> {
     let mut encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new();
     let mut deflate = DeflateDecoder::new(&encoded_body[..]);
     deflate.read_to_end(&mut decoded_buffer).unwrap();
     traffic.response_body = decoded_buffer.clone();
-    Ok(traffic)
+    Ok(())
 }
 
-pub async fn decompress_br(traffic: &mut Traffic) -> Result<&mut Traffic, std::io::Error> {
+pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), std::io::Error> {
     let mut encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new();
     let mut brotli = brotli::DecompressorWriter::new(&mut decoded_buffer[..], 4096);
     brotli.write_all(&encoded_body[..]).unwrap();
     brotli.into_inner().unwrap();
     traffic.response_body = decoded_buffer.clone();
-    Ok(traffic)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -70,6 +80,7 @@ s_b();
 }catch(e){_DumpException(e)}
 // Google Inc.
 "###; 
+
         let mut traffic = Traffic{
             method:"GET".to_string(),
             scheme:"https".to_string(),
@@ -107,12 +118,13 @@ s_b();
             response_body:[31,139,8,0,0,0,0,0,0,0,157,83,209,110,218,48,20,125,231,43,168,31,144,45,89,105,171,178,178,21,69,19,109,105,65,237,186,54,165,210,222,34,39,118,136,219,16,179,216,1,162,192,191,207,54,161,13,108,108,104,79,137,175,125,207,185,62,231,88,101,69,217,144,62,129,128,127,121,126,184,140,0,234,54,102,36,107,74,191,127,27,185,210,31,64,64,127,12,123,231,186,190,46,223,232,114,148,167,161,226,34,133,4,149,210,23,78,72,146,4,170,152,75,76,156,59,130,186,230,215,201,132,80,253,132,77,88,170,92,91,24,51,229,233,26,68,14,75,96,117,200,123,210,28,119,235,94,240,237,49,255,116,22,130,106,159,71,144,232,77,239,39,220,133,195,32,33,1,75,18,70,131,2,32,84,154,193,2,151,138,48,55,187,134,167,58,120,89,12,169,158,177,27,180,90,48,112,36,83,61,165,50,30,228,138,65,16,137,12,224,106,6,211,82,219,226,84,163,98,233,63,86,212,222,211,22,35,38,8,173,86,93,233,207,161,149,67,159,20,168,107,127,157,27,51,178,208,159,106,61,205,132,18,170,152,50,103,48,169,201,134,3,84,110,184,195,152,133,111,140,30,185,46,209,99,238,84,93,130,225,76,112,218,60,113,93,55,88,46,3,212,106,217,35,122,216,241,152,101,208,250,164,231,209,124,35,189,104,143,8,182,204,218,70,233,7,90,198,198,42,36,42,140,33,67,165,127,157,79,166,253,69,200,166,118,10,134,86,13,101,236,175,252,30,209,181,223,247,241,226,51,179,65,248,119,171,77,206,188,253,82,60,124,4,167,227,29,22,144,55,226,30,157,174,127,133,145,109,24,64,192,146,71,74,181,252,7,69,104,227,65,199,219,88,208,241,182,28,208,203,15,3,102,147,90,112,81,9,128,86,84,250,220,96,62,171,34,97,176,154,4,3,149,145,84,234,124,76,0,250,170,225,95,126,11,160,9,199,130,194,77,226,176,21,15,225,234,86,203,229,186,97,220,131,239,53,247,232,4,161,11,67,39,255,66,135,193,230,230,47,90,86,153,247,191,83,243,28,222,91,192,140,75,30,240,132,43,157,66,16,115,74,89,10,172,12,91,55,149,177,152,143,132,72,20,159,214,111,124,48,48,79,99,150,113,101,144,27,59,208,249,235,127,33,238,29,117,220,171,227,153,252,24,251,46,23,48,101,115,29,165,222,66,107,123,189,89,93,45,240,233,89,251,252,172,141,140,215,59,6,44,112,249,179,125,65,86,150,227,30,110,243,96,112,31,93,63,132,12,224,26,91,198,84,158,165,77,123,137,252,117,133,254,216,199,110,121,49,8,246,246,213,164,222,3,48,136,174,102,147,189,253,58,148,182,207,188,221,59,207,188,221,142,119,224,211,61,62,110,222,10,49,78,88,115,152,134,78,227,23,158,240,192,30,201,5,0,0].to_vec(),
             version:"HTTP/1.1".to_string()
         };
+
         let encoded_body = traffic.response_body.clone();
         let result = decompress_gzip(&mut traffic).await.unwrap();
-        let decoded_body = result.response_body.clone();
-        println!("{}", std::str::from_utf8(&decoded_body).unwrap());
-        assert_ne!(encoded_body, decoded_body);
-        assert_eq!(decoded_string, std::str::from_utf8(&decoded_body).unwrap());
+        let decoded_traffic = traffic.response_body.clone();
+        println!("{}", std::str::from_utf8(&decoded_traffic).unwrap());
+        assert_ne!(encoded_body, decoded_traffic);
+        assert_eq!(decoded_string, std::str::from_utf8(&decoded_traffic).unwrap());
         Ok(())
     }
 
