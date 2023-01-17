@@ -1,5 +1,6 @@
 
 use crate::DATASTORE_CLIENT;
+use crate::TRAFFIC_FILTER_CHAIN;
 use crate::service::ca::CA;
 use crate::model::record::Record;
 use crate::model::traffic::Traffic;
@@ -129,36 +130,38 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
 
     let (mut response_browser, mut response_traffic) = clone_response(response).await.unwrap();
     
-    let traffic = Traffic::new(request_traffic, response_traffic).await;
+    let mut traffic = Traffic::new(request_traffic, response_traffic).await;
     tokio::task::spawn(async move {
-        process_traffic(&traffic).await;
+        process_traffic(&mut traffic).await;
     });
-
     Ok(response_browser)
 }
 
-pub async fn process_traffic(traffic: &Traffic) {
-    //filter_traffic(traffic).await;
-    store_data(traffic).await;
-}
-
-pub async fn filter_traffic(traffic: &Traffic) -> Option<Traffic> {
-
-    None
+pub async fn process_traffic(traffic: &mut Traffic) {
+    let filter_chain = TRAFFIC_FILTER_CHAIN.get().expect("Traffic filtering chain not intialized.");
+    match filter_chain.filter(traffic).await{
+        Ok(_) => {
+            let record = Record::new(traffic).await; // Modify your datastores to handle this next.
+            store_data(traffic).await;
+        },
+        Err(_) => {
+            /* Filtering chain dropped traffic. */
+        },
+    }
 }
 
 pub async fn store_data(traffic: &Traffic) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
     let result = datastore.add_traffic(&traffic).await;
     match result {
-        Ok(()) => {
-            println!("{}", &traffic);
-        },
+        Ok(()) => {},
         Err(e) => {
             println!("{:?}", e);
         },
     }
 }
+
+// This is tech debt. Implement .Copy() for hyper::traffic or find a better way.
 
 pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
     let (parts, body) = request.into_parts();

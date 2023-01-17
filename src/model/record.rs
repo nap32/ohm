@@ -16,7 +16,7 @@ pub struct Record {
     pub method      : String,
     pub host        : String,
     pub path        : String,
-    pub auth        : crate::AuthInfo,
+    pub auth        : Option<crate::AuthInfo>,
     pub traffic     : Vec::<crate::Traffic>,
 }
 impl PartialEq for Record {
@@ -28,30 +28,19 @@ impl PartialEq for Record {
 }
 impl Eq for Record {}
 impl fmt::Display for Record {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f : &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_json())
     }
 }
 impl Record {
 
-    pub async fn new(request : hyper::Request<hyper::Body>, response : hyper::Response<hyper::Body>) -> Self {
+    pub async fn new(traffic: &mut crate::model::traffic::Traffic) -> Self {
         let mut me = Self {
-            method : match *request.method() {
-                Method::GET => "GET".to_string(),
-                Method::PUT => "PUT".to_string(),
-                Method::POST => "POST".to_string(),
-                Method::HEAD => "HEAD".to_string(),
-                Method::PATCH => "PATCH".to_string(),
-                Method::TRACE => "TRACE".to_string(),
-                Method::DELETE => "DELETE".to_string(),
-                Method::OPTIONS => "OPTIONS".to_string(),
-                Method::CONNECT => "CONNECT".to_string(),
-                _ => "?".to_string(),
-            },
-            host : request.uri().host().unwrap().to_string(),
-            path : request.uri().path().to_string(),
-            auth : crate::AuthInfo::new(),
-            traffic : Vec::<crate::Traffic>::new(),
+            method  :   traffic.method.clone(),
+            host    :   traffic.host.clone(),
+            path    :   traffic.path.clone(),
+            auth    :   None,
+            traffic :   vec![traffic.clone()], 
         };
         return me 
     }

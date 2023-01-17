@@ -11,15 +11,12 @@ use crate::model::auth::AuthInfo;
 
 pub mod data;
 use crate::data::Datastore;
-use data::mongo::*;
 use crate::data::mongo::Mongo;
 
 pub mod service;
-use service::ca::*;
 use crate::service::ca::CA;
-use service::proxy::*;
-use service::config::*;
 use crate::service::config::Config;
+use crate::service::filter::Filter;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -41,14 +38,6 @@ use tokio_rustls::rustls;
 use tokio_rustls::rustls::{ServerConfig, ConfigBuilder, PrivateKey};
 use http::uri::{Authority, Scheme};
 
-use openssl::asn1::{Asn1Integer, Asn1Time};
-use openssl::bn::BigNum;
-use openssl::hash::MessageDigest;
-use openssl::pkey::{PKey, Private};
-use openssl::rand;
-use openssl::x509::extension::SubjectAlternativeName;
-use openssl::x509::{X509, X509Builder, X509NameBuilder};
-
 use once_cell::sync::OnceCell;
 
 // https://hyper.rs/guides/server/hello-world/
@@ -63,6 +52,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 static CONFIG : OnceCell<Config> = OnceCell::new();
 static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new(); 
+static TRAFFIC_FILTER_CHAIN : OnceCell<Filter> = OnceCell::new();
 
 #[tokio::main]
 async fn main() { 
@@ -73,7 +63,11 @@ async fn main() {
     }
     match DATASTORE_CLIENT.set(Mongo::new().await) {
         Ok(()) => (),
-        Err(e) => { panic!("Error setting OnceCell<Mongo>"); },
+        Err(e) => { panic!("Error setting Mongo"); },
+    };
+    match TRAFFIC_FILTER_CHAIN.set(Filter::new().await) {
+        Ok(()) => (),
+        Err(e) => { panic!("Error setting Filter."); },
     };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.get().unwrap().net.port));

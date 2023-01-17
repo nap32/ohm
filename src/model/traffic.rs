@@ -20,10 +20,11 @@ pub struct Traffic {
     pub query : String,
     pub request_headers : HashMap<String, String>, 
     pub request_body : Vec<u8>,
+    pub request_body_string : Option<String>,
     pub status: u16,
     pub response_headers : HashMap<String, String>, 
     pub response_body : Vec<u8>,
-
+    pub response_body_string : Option<String>,
     pub version : String,
 }
 impl PartialEq for Traffic {
@@ -71,9 +72,11 @@ impl Traffic {
             },
             request_headers : HashMap::<std::string::String, std::string::String>::new(),
             request_body : Vec::<u8>::new(),
+            request_body_string : None,
             status : response.status().as_u16(),
             response_headers : HashMap::<std::string::String, std::string::String>::new(),
             response_body : Vec::<u8>::new(),
+            response_body_string : None,
             version : match request.version() {
                 hyper::Version::HTTP_2 => "HTTP/2.0".to_string(),
                 hyper::Version::HTTP_3 => "HTTP/3.0".to_string(),
