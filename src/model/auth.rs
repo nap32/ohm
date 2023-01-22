@@ -52,7 +52,7 @@ impl AuthInfo {
         issuer = traffic.host.clone();
 
         if query_pairs.contains_key("response_type") {
-            grant_type = query_pairs.get("reponse_type").unwrap().to_string();
+            grant_type = query_pairs.get("response_type").unwrap().to_string();
         }
         if query_pairs.contains_key("client_id") {
             client_id = query_pairs.get("client_id").unwrap().to_string();

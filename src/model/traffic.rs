@@ -119,7 +119,9 @@ impl Traffic {
         for pair in query_string.split('&') {
             let mut query_param = pair.split('=').take(2);
             let keyval = match (query_param.next(), query_param.next()) {
-                (Some(key), Some(val)) => map.insert(key.to_string(), val.to_string()),
+                (Some(key), Some(val)) => {
+                    map.insert(key.to_string(), val.to_string());
+                },
                 _ => continue,
             };
         }

@@ -43,6 +43,8 @@ impl Filter {
     }
 }
 
+// We need to drop super large response bodies.
+
 // Filter on config's [filter] vectors. 
 
 pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
@@ -75,9 +77,9 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
 
             {
                 let query_map = traffic.get_query_map();
-                if query_map.contains_key("redirect_url") &&
+                if query_map.contains_key("redirect_uri") &&
                     query_map.contains_key("client_id") &&
-                    query_map.contains_key("grant_type") {
+                    query_map.contains_key("response_type") {
                         let mut auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
                         tokio::spawn(async move {
                             crate::service::proxy::store_auth(&mut auth).await;

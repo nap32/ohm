@@ -123,7 +123,7 @@ cargo run
 
 use ohm
 db.traffic.find({"host":{"$not":{"$regex":"xyz","$options":"i"}}})
-db.auth.distinct("client_id")
+db.authinfo.distinct("client_id")
 exit
 ```
 
