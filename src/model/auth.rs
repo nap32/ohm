@@ -9,14 +9,14 @@ use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthInfo {
-    pub grant_type      :   String,
-    pub issuer          :   String,
-    pub client_id       :   String,
-    pub redirect_url    :   String,
+    pub grant_type      : String,
+    pub issuer          : String,
+    pub client_id       : String,
+    pub redirect_url    : String,
 
-    pub token_format    :   String,
-    pub token_key       :   String,
-    pub token_val       :   String,
+    pub token_format    : String,
+    pub token_key       : String,
+    pub token_val       : String,
 }
 impl PartialEq for AuthInfo {
     fn eq(&self, other: &Self) -> bool {
@@ -38,13 +38,13 @@ impl fmt::Display for AuthInfo {
 impl AuthInfo {
     pub fn new() -> Self {
         Self {
-            grant_type : String::default(),
-            issuer : String::default(),
-            client_id : String::default(),
+            grant_type   : String::default(),
+            issuer       : String::default(),
+            client_id    : String::default(),
             redirect_url : String::default(),
             token_format : String::default(),
-            token_key : String::default(),
-            token_val : String::default(),
+            token_key    : String::default(),
+            token_val    : String::default(),
         }
     }
     pub fn get_json(&self) -> std::string::String {

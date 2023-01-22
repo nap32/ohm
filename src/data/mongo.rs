@@ -63,6 +63,8 @@ impl Mongo {
 
         let collection_name = &crate::CONFIG.get().unwrap().db.collection_name;
 
+        // This is not optimized, but leaving as a skeleton in the event some sort of filtering
+        // logic is needed.
         let filter = doc!{ };
         let mut collection : Option<mongodb::Collection<Record>> = None; 
         let collection_names = db.list_collection_names(filter).await?;

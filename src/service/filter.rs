@@ -1,4 +1,5 @@
 use crate::Traffic;
+use crate::CONFIG;
 
 use std::collections::HashMap;
 use std::io::{Read, Write, Error, ErrorKind};
@@ -18,6 +19,9 @@ impl Filter {
     pub async fn new() -> Self {
         Self {
             filters : vec![
+                |traffic| Box::pin(check_identity_providers(traffic)),
+                |traffic| Box::pin(check_allow_list_host(traffic)),
+                |traffic| Box::pin(check_deny_list_host(traffic)),
                 |traffic| Box::pin(decompress_gzip(traffic)),
                 |traffic| Box::pin(decompress_deflate(traffic)),
                 |traffic| Box::pin(decompress_br(traffic)),
@@ -36,6 +40,39 @@ impl Filter {
         }
         Ok(())
     }
+}
+
+// Filter dropping junk domains.
+
+pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
+    let config = CONFIG.get().expect("Config is not initialized, somehow...");
+    for allowed_host in &config.filter.allow_list_hosts {
+        if traffic.host.contains(allowed_host) {
+            return Ok(())
+        }
+    }
+    return Err(()) // Drop this undesirable traffic.
+}
+
+pub async fn check_deny_list_host(traffic: &mut Traffic) -> Result<(), ()> {
+    let config = CONFIG.get().expect("Config is not intialized, somehow...");
+    for denied_host in &config.filter.deny_list_hosts {
+        if traffic.host.contains(denied_host) {
+            return Err(()) // Drop this undesirable traffic.
+        }
+    }
+    return Ok(())
+}
+
+pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
+    let config = CONFIG.get().expect("");
+    for idp in &config.filter.identity_providers {
+        if traffic.host.contains(idp) {
+            // Spawn auth-parsing task.
+            return Err(()) // This traffic is not intended for our collection.
+        }
+    }
+    return Ok(()) // This is not an identity provider, we can proceed.
 }
 
 // Parsing strings from bodies.

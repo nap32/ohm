@@ -49,16 +49,19 @@ impl Postgres {
     pub async fn create_table(client: tokio_postgres::Client) -> Result<(), tokio_postgres::Error> {
         client.batch_execute("
             CREATE TABLE traffic (
-                method              TEXT
-                scheme              TEXT
-                host                TEXT
-                path                TEXT
-                query               TEXT
-                request_headers     TEXT[2][]
-                request_body        BYTEA
-                response_headers    TEXT[2][]
-                response_body       BYTEA
-                status              INT
+                method                  TEXT
+                scheme                  TEXT
+                host                    TEXT
+                path                    TEXT
+                query                   TEXT
+                request_headers         TEXT[2][]
+                request_body            BYTEA
+                request_body_string     TEXT
+                status                  TEXT
+                response_headers        TEXT[2][]
+                response_body           BYTEA
+                response_body_string    TEXT
+                version                 TEXT
             )
         ").await?;
         Ok(())
@@ -67,7 +70,7 @@ impl Postgres {
     pub async fn insert_traffic(&self, traffic: &Traffic) -> Result<(), tokio_postgres::Error> {
         // '{ { KEY, VAL }, { KEY, VAL } , { KEY, VAL } }' to insert array - utility function used.
         self.client.execute(
-            "INSERT INTO traffic (method, scheme, host, path, query, request_headers, request_body, response_headers, response_body, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "INSERT INTO traffic (method, scheme, host, path, query, request_headers, request_body, request_body_string, status, response_headers, response_body, response_body_string, version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
             &[  &traffic.method,
                 &traffic.scheme,
                 &traffic.host,
@@ -75,9 +78,12 @@ impl Postgres {
                 &traffic.query,
                 &Postgres::prepare_tuple_array(&traffic.request_headers).await.unwrap(),
                 &traffic.request_body,
+                &traffic.request_body_string,
+                &traffic.status.to_string(),
                 &Postgres::prepare_tuple_array(&traffic.response_headers).await.unwrap(),
                 &traffic.response_body,
-                &traffic.status.to_string()
+                &traffic.response_body_string,
+                &traffic.version.to_string()
             ],
         ).await?;
         Ok(())

@@ -10,3 +10,24 @@ db_url = "mongodb://localhost:27017"
 app_name = "Ohm"
 db_name = "records"
 collection_name = "records"
+
+[filter]
+allow_list_hosts = [
+    # These hosts are traffic you wish to restrict datastore ingestion to.
+    # If traffic being filtered does not contain any of these, it will 'drop' and not store.
+    # Note - the traffic still returns to the browser, this is specific to datastore ingestion.
+    # Note - if you leave this list empty the rule will not be applied and all traffic will pass this rule.
+]
+deny_list_hosts = [
+    # These hosts are junk traffic you don't wish to store to a database.
+    # If traffic being filtered contains any of these, it will 'drop' and not store.
+    # Note - the junk traffic still returns to the browser, this is specific to datastore ingestion.
+    "google.com",
+    "firefox.com",
+    "mozilla.com",
+]
+identity_providers = [
+    # These hosts are identity providers used for OAuth2.
+    # They drop traffic without storing to a database to avoid leaking user+pass.
+    # They also parse part of the auth model - client_id, redirect_url, aud, scopes.
+]

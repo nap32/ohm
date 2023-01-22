@@ -8,4 +8,6 @@ pub mod redis;
 #[async_trait]
 pub trait Datastore {
     async fn add_traffic(&self, traffic : &crate::Traffic) -> Result<(), Box<dyn std::error::Error>>; 
+    //async fn add_record(&self, record : &crate::Record) -> Result<(), Box<dyn std::error::Error>>;
+    //async fn add_auth(&self, auth : &crate::Auth) -> Result<(), Box<dyn std::error::Error>>;
 }
