@@ -46,6 +46,9 @@ impl Filter {
 
 pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("Config is not initialized, somehow...");
+    if config.filter.allow_list_hosts.len().eq(&0) {
+        return Ok(()) // If you don't have any entries on the allow list pass everything.
+    }
     for allowed_host in &config.filter.allow_list_hosts {
         if traffic.host.contains(allowed_host) {
             return Ok(())
