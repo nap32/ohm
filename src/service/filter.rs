@@ -42,7 +42,7 @@ impl Filter {
     }
 }
 
-// Filter dropping junk domains.
+// Filter on config's [filter] vectors. 
 
 pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("Config is not initialized, somehow...");
@@ -68,7 +68,7 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("");
     for idp in &config.filter.identity_providers {
         if traffic.host.contains(idp) {
-            // Spawn auth-parsing task.
+            // Spawn auth-parsing task. hashmap
             return Err(()) // This traffic is not intended for our collection.
         }
     }

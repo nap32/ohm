@@ -7,9 +7,11 @@ key_relative_path = "./config/ohm.key"
 
 [db]
 db_url = "mongodb://localhost:27017"
-app_name = "Ohm"
-db_name = "records"
-collection_name = "records"
+app_name = "ohm"
+db_name = "ohm"
+record_collection_name = "records"
+traffic_collection_name = "traffic"
+auth_collection_name = "auth"
 
 [filter]
 allow_list_hosts = [

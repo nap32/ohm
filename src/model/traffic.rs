@@ -1,6 +1,4 @@
-#![allow(unused_imports)]
 #![allow(dead_code)]
-#![allow(unused_assignments)]
 
 use std::collections::HashMap;
 use std::fmt;
@@ -113,6 +111,19 @@ impl Traffic {
     pub fn get_json(&self) -> std::string::String {
         let serialized = serde_json::to_string(&self).unwrap();
         return serialized
+    }
+
+    pub fn get_query_map(&self) -> HashMap<String, String> {
+        let mut query_string = self.query.clone();
+        let mut map = HashMap::<String, String>::new();
+        for pair in query_string.split('&') {
+            let mut query_param = pair.split('=').take(2);
+            let keyval = match (query_param.next(), query_param.next()) {
+                (Some(key), Some(val)) => map.insert(key.to_string(), val.to_string()),
+                _ => continue,
+            };
+        }
+        map 
     }
 
     pub fn get_hyper_request(&self) -> Result<hyper::Request<hyper::Body>, std::io::Error> {
@@ -236,6 +247,11 @@ impl Traffic {
 mod tests {
     use super::*; 
     
+    // Test coverage -- TODO:
+    // get_hyper_*
+    // get_query_map
+    // get_raw_*
+
     #[test]
     fn test_hyper_to_record() -> Result<(), std::io::Error> {
         

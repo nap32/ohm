@@ -25,7 +25,9 @@ pub struct Db {
     pub db_url : String,
     pub app_name : String,
     pub db_name : String,
-    pub collection_name : String,
+    pub record_collection_name : String,
+    pub traffic_collection_name : String,
+    pub auth_collection_name : String,
 }
 
 #[derive(Serialize, Deserialize)]

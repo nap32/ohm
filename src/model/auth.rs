@@ -1,3 +1,5 @@
+use crate::Traffic;
+
 use std::collections::HashMap;
 use std::fmt;
 use serde::{Serialize, Deserialize};
@@ -6,6 +8,8 @@ use hyper::{Request, Response, Body, StatusCode, Method};
 use flate2::read::GzDecoder;
 use std::io::prelude;
 use std::io::Read;
+
+type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthInfo {
@@ -36,17 +40,38 @@ impl fmt::Display for AuthInfo {
     }
 }
 impl AuthInfo {
-    pub fn new() -> Self {
+
+    pub fn new(traffic : &mut Traffic) -> Self {
+        let query_pairs = traffic.get_query_map();
+
+        let mut issuer = String::default();
+        let mut grant_type = String::default();
+        let mut client_id = String::default();
+        let mut redirect_url = String::default();
+
+        issuer = traffic.host.clone();
+
+        if query_pairs.contains_key("response_type") {
+            grant_type = query_pairs.get("reponse_type").unwrap().to_string();
+        }
+        if query_pairs.contains_key("client_id") {
+            client_id = query_pairs.get("client_id").unwrap().to_string();
+        }
+        if query_pairs.contains_key("redirect_url") {
+            redirect_url = query_pairs.get("redirect_url").unwrap().to_string();    
+        }
+
         Self {
-            grant_type   : String::default(),
-            issuer       : String::default(),
-            client_id    : String::default(),
-            redirect_url : String::default(),
+            issuer,
+            grant_type,
+            client_id,
+            redirect_url,
             token_format : String::default(),
             token_key    : String::default(),
             token_val    : String::default(),
         }
     }
+
     pub fn get_json(&self) -> std::string::String {
         let serialized = serde_json::to_string(&self).unwrap();
         return serialized
