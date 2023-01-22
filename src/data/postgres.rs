@@ -21,6 +21,11 @@ impl Datastore for Postgres {
             Err(e) => Err(Box::new(e)),
         }
     }
+
+    async fn add_auth(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+        // TO-DO.
+        Ok(())
+    }
 }
 
 impl Postgres {

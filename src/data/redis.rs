@@ -17,6 +17,10 @@ impl Datastore for Redis {
         self.insert_traffic(traffic).await.unwrap();
         Ok(())
     }
+    async fn add_auth(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+        // TO-DO.
+        Ok(())
+    }
 }
 impl Redis {
     pub async fn new() -> Self {

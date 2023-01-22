@@ -1,5 +1,6 @@
 use crate::Traffic;
 use crate::CONFIG;
+use crate::service::proxy;
 
 use std::collections::HashMap;
 use std::io::{Read, Write, Error, ErrorKind};
@@ -71,8 +72,20 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("");
     for idp in &config.filter.identity_providers {
         if traffic.host.contains(idp) {
-            // Spawn auth-parsing task. hashmap
-            return Err(()) // This traffic is not intended for our collection.
+
+            {
+                let query_map = traffic.get_query_map();
+                if query_map.contains_key("redirect_url") &&
+                    query_map.contains_key("client_id") &&
+                    query_map.contains_key("grant_type") {
+                        let mut auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
+                        tokio::spawn(async move {
+                            crate::service::proxy::store_auth(&mut auth).await;
+                        });
+                }
+            }
+
+            return Err(()) // This traffic is not intended for traffic collection.
         }
     }
     return Ok(()) // This is not an identity provider, we can proceed.

@@ -1,19 +1,36 @@
 # About
 
-Ω Ω Ω Ω Ω Ω Ω Ω Ω Ω
+Ω Ω Ω
 
-Ohm is an intercepting proxy designed to passively parse request-response pairs into a common format and update/insert to a database.\
 \
-Ohm is written in rust using the powerful tokio asynchronous runtime engine and leveraging hyper as an HTTP library.\
-\
-As a result, Ohm is a fast and memory-safe asynchronous HTTP / HTTPS intercepting proxy.
+Ohm is a fast and memory-safe asynchronous HTTP / HTTPS intercepting proxy. \
+Ohm is designed to passively parse request-response pairs and write the information to a database.\
+The intention is to expose local browser traffic in a database to support automation and gather information.\
+The hope is that Ohm is flexible enough to support a variety of use-cases.
+
+### Current Issues / Next Steps
+
+What stands between Ohm and public release?
+
+- Need to revamp redis and postgres.
+- Need to handle record parsing.
+- Need to add record to database interface.
+- Need to support using other databases (mongo currently hardcoded).
+- Need a lot of testing coverage.
+- Need to gracefully handle websockets.
+- Need to handle identifying other half of AuthInfo from usage.
+- Need to handle aud and scopes in AuthInfo.
+- Need to handle all the .unwrap()'s as it isn't good.
+- Need to refactor the way request and response clone traffic - seek better solution.
+- Need to actually make a good README.md
+- Chaining proxies has Ohm listen over `http://` instead of `https://` - need to investigate.
 
 ### Features
 
 - HTTP/HTTPS Intercepting Proxy
 - Supports multiple major databases - Mongo, Postgres, and Redis; store your data in your preferred format.
-- Works in tandem with existing intercepting proxies.
-- Leverage database feature-rich ecosystems to manage your traffic history.
+- Works in tandem with existing intercepting proxies - chain multiple proxies together.
+- Leverage your preferred database solution's feature-rich ecosystem to manage your traffic history.
 - Designed as a passive proxy - processing records spawned as a seperate thread/task and traffic returned to the user without synchronous blocking.
 - Designed in a memory-safe way.
 - Ohm is fast.
@@ -22,18 +39,17 @@ As a result, Ohm is a fast and memory-safe asynchronous HTTP / HTTPS interceptin
 
 ##### Decompression of response bodies happens by default.
 While the intention was to store traffic as-is to keep it usage flexible,
-in usage it became clear that storing encoded bodies to the datastore
-prevented effective queries relating to response body contents.
+you can't store encoded bodies to the datastore and also effectively search the contents.
 
 ##### Application-level mechanism for filtering.
-The original intention was to leverage datastore event triggers to filter traffic.
-The hope was to avoid defining an interface whose syntax needed memorized.
+The original intention was to leverage datastore event triggers to filter traffic.\
+The hope was to avoid defining an interface whose syntax needed memorized.\
 There are a couple of issues with this approach -
 1. Not every datastore has event triggers or is capable of filtering traffic on write.
 2. A multi-user datastore would leak issuer traffic and session tokens.
 
-To compromise, Ohm sets up a minimal filtering chain interface that can be extended in configuration or source.
-This enables the ability to configure behavior of the filters without recompiling from source.
+To compromise, Ohm sets up a minimal filtering chain interface that can be extended in configuration or source.\
+This enables the ability to configure behavior of the filters without recompiling from source.\
 Where more advanced filtering behavior is needed, you can write another function or use downstream mechanisms like event triggers.
 
 # Setup
@@ -68,19 +84,18 @@ Third, you'll need to modify `config.yaml` to specify the correct details relati
 
 # Usage
 \
-Once Ohm is up-and-running, the proxy satisfies a powerful means to ingest browser traffic as persistent records into a data store.\
+Once Ohm is up-and-running, the proxy passively ingests browser traffic into the configured datastore.\
 \
-Without too much effort, using the database solution's tooling provides a local logging mechanism.\
-By leveraging existing knowledge of queries, you can quickly answer questions such as:
+Using the database solution's tooling provides a local logging mechanism out-of-the-box.\
+By querying your traffic records, you can quickly answer questions such as:
 
-    * "What routes have I enumerated for this API?"
-    * "How many services do I know about?"
+    * "What endpoints/routes have I enumerated for this API?"
+    * "How many unique services do I know about on this subdomain?"
     * "Do I know of any applications using this potentially problematic header?"
     * "How do I make this POST request again - what form fields do I need?"
 
 Through consistent use, you'll build up more complete information over time without needing to maintain the traffic in notes or navigate intercepting proxy traffic history.\
-\
-This is not the only value that Ohm can provide, as the database's resulting collection of traffic records provides a flexible interface to streamline automation efforts.\
+The result is a collection of traffic records that provide a flexible interface to streamline automation efforts.\
 Ohm is designed to avoid introducing undesirable domain-specific languages or interface definition languages and instead offer the flexibility for its users to leverage database solutions.\
 You can tailor your tooling to your specific use-case or workload - potential ideas to consider include:
 
@@ -96,11 +111,25 @@ Rather than include solutions to some or all of the suggestions above in rigid a
 Listen to and record 'all the things' into a format that's reused across the rest of a user's/team's ecosystem.\
 This avoids enforcing opinions on how to use the traffic and instead offers the user the opportunity to come up with their own solutions.
 
+### Quick Start.
+
+Follow setup in section above.
+Make sure the container for the database is started.
+
+```
+docker exec -it ohm-mongo mongosh
+
+cargo run
+
+use ohm
+db.traffic.find({"host":{"$not":{"$regex":"xyz","$options":"i"}}})
+db.auth.distinct("client_id")
+exit
+```
+
 # Chaining Proxies w/ Ohm
 
-Ohm is capable of working in tandem with another proxy solution.\
-Ohm will unintrusively passively collect and write traffic to the database, including any modifications your downstream proxy might make.\
-This gives you the best of both worlds - existing workflows using another proxy solution are unimpacted and you can still collect and persist traffic to a database.\
+Ohm is capable of working alongside other proxy solutions.\
 While the setup might be specific to the individual proxy(chain), common intercepting proxy examples are detailed below:
 
 ### mitmproxy
@@ -114,7 +143,6 @@ mitmproxy --mode upstream:http://127.0.0.1:8085
 ```
 
 If you use an `https://` scheme instead of `http://`, mitmproxy will complain that the upstream server doesn't speak TLS.\
-This issue will be triaged and addressed, it is currently in the backlog.\
 Be sure to restrict to the local interface and appropriately lock down.\
 Consider namespaces or putting everything behind a docker network so only Mitmproxy and Ohm are on a LAN.
 
@@ -124,7 +152,7 @@ Ohm does not prevent the user from misconfiguring or exposing secrets during usa
 Several mistakes can be made in setup that result in a security issue:
 
     1. If you're testing the tool and stand up a database container locally, make sure you bind it to the local interface to prevent yourself from offering traffic to your LAN or WAN.
-    2. If you don't have event triggers to handle records generated for the identity providers used to login, you'll expose the username and passwords used to login to anyone with access to the data.
+    2. If you login through a site not listed in the configuration file as an identity provider, the username and password will be logged to the database.
     3. If you don't setup your datastore with authentication, you're hosting traffic containing session tokens to anyone who can interface with the datastore.
     4. It would be wise to encrypt the datastore at rest to prevent leaking sensitive information - credentials, PII, internal-only services.
 
@@ -138,9 +166,8 @@ Ohm is inspired by or has benefitted from the ideas or code contained in the fol
 
     * https://github.com/mitmproxy/mitmproxy
     * https://github.com/omjadas/hudsucker
-    * https://github.com/
     * https://github.com/tokio-rs/tokio
     * https://github.com/hyperium/hyper
 
-In addition, many other libaries enable Ohm to function. Check out the `Cargo.toml` for a complete list of dependencies.\
+Check out the `Cargo.toml` for a complete list of dependencies.\
 Thank you!

@@ -4,6 +4,7 @@ use crate::TRAFFIC_FILTER_CHAIN;
 use crate::service::ca::CA;
 use crate::model::record::Record;
 use crate::model::traffic::Traffic;
+use crate::model::auth::AuthInfo;
 use crate::data::mongo::Mongo;
 use crate::data::Datastore;
 
@@ -142,7 +143,7 @@ pub async fn process_traffic(traffic: &mut Traffic) {
     match filter_chain.filter(traffic).await{
         Ok(_) => {
             let record = Record::new(traffic).await; // Modify your datastores to handle this next.
-            store_data(traffic).await;
+            store_traffic(traffic).await;
         },
         Err(_) => {
             /* Filtering chain dropped traffic. */
@@ -150,9 +151,20 @@ pub async fn process_traffic(traffic: &mut Traffic) {
     }
 }
 
-pub async fn store_data(traffic: &Traffic) {
+pub async fn store_traffic(traffic: &Traffic) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
     let result = datastore.add_traffic(&traffic).await;
+    match result {
+        Ok(()) => {},
+        Err(e) => {
+            println!("{:?}", e);
+        },
+    }
+}
+
+pub async fn store_auth(auth: &AuthInfo) {
+    let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
+    let result = datastore.add_auth(&auth).await;
     match result {
         Ok(()) => {},
         Err(e) => {
