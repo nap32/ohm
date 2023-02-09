@@ -95,7 +95,7 @@ async fn get_config_argument() -> String {
             return "./config/config.toml".to_string();
         },
         2 => {
-            return args[2].to_string();
+            return args[1].to_string();
         },
         _ => {
             panic!("Usage: ohm [path/to/custom/config/file]");
