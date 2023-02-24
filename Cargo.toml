@@ -29,3 +29,5 @@ serde = "1.0.151"
 serde_json = "1.0.91"
 flate2 = "1.0.25"
 brotli = "3.3.4"
+
+lazy_static = "1.4.0"

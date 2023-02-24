@@ -8,9 +8,18 @@ use tokio::net::{TcpStream, TcpListener};
 use flate2::{read::GzDecoder, read::DeflateDecoder, Decompress};
 use brotli::Decompressor;
 use futures::future::{Future, BoxFuture};
+use regex::Regex;
+use lazy_static::lazy_static;
 
 // Defining the type that a filtering function takes.
 type FilterFunction = fn(&mut Traffic) -> BoxFuture<'_, Result<(), ()>>;
+
+
+lazy_static! {
+    static ref UUID_RE: Regex = Regex::new(r"^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$").unwrap();
+    static ref FLOAT_RE: Regex = Regex::new(r"^(?:\d+(?:\.\d*)?|\.\d+)$").unwrap();
+    static ref INT_RE: Regex = Regex::new(r"^[[:digit:]][[:digit:]]*$").unwrap();
+}
 
 pub struct Filter {
     filters: Vec<FilterFunction> 
@@ -43,7 +52,28 @@ impl Filter {
     }
 }
 
-// We need to drop super large response bodies.
+// Tokenize method has four parameters, but this can act as a flexible function instead of
+// writing one function per desired token or for each query + param etc.
+
+pub async fn tokenize(source_str: &mut String, source_delimiter: &str, token_label: &str, token_re: &Regex ) -> Result<(), ()> {
+    let mut tokens = Vec::<String>::new();
+    for mut token in source_str.split(source_delimiter) {
+        token = token.strip_suffix("\r\n").or(token.strip_suffix("\n")).unwrap_or(token);
+        match token_re.is_match(token) {
+            true => {
+                tokens.push(format!("{}",token));
+                continue
+            },
+            false => {
+                continue
+            }
+        }
+    }
+    for token in tokens {
+        *source_str = source_str.replace(&token, token_label);
+    }
+    Ok(())
+}
 
 // Filter on config's [filter] vectors. 
 
@@ -177,6 +207,37 @@ pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
 mod tests {
     use super::*;
     
+    #[tokio::test]
+    async fn test_tokenize_uuid() -> Result<(), std::io::Error> {
+        let re = Regex::new(r"^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$").unwrap();
+        let mut traffic = Traffic{
+            method:"GET".to_string(),
+            scheme:"https".to_string(),
+            host:"www.foobar.com".to_string(),
+            path:"/f81d4fae-7dec-11d0-a765-00a0c91e6bf6/f83f4fae-7dec-11d4-a768-03a0d91e6bf6".to_string(),
+            query:"xjs=s2".to_string(),
+            request_headers: HashMap::from([
+                ("cookie".to_string(),                          "foo=bar".to_string()),
+                ("sec-fetch-site".to_string(),                  "same-origin".to_string()),
+                ("user-agent".to_string(),                      "Mozilla/5.0 (X11; Linux x86_64; rv:107.0) Gecko/20100101 Firefox/107.0".to_string()),
+                ("host".to_string(),                            "www.google.com".to_string()),
+            ]),
+            request_body:[].to_vec(),
+            request_body_string:None,
+            status:200,
+            response_headers: HashMap::from([
+                ("vary".to_string(),                            "Accept-Encoding, Origin".to_string()),
+            ]),
+            response_body:[].to_vec(),
+            response_body_string:None,
+            version:"HTTP/1.1".to_string()
+
+        };
+        let _ = tokenize(&mut traffic.path, "/", "<:UUID>", &UUID_RE).await;
+        assert_eq!(traffic.path, "/<:UUID>/<:UUID>");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_decompress_gzip() -> Result<(), std::io::Error> {
         let decoded_string = r###"try{
