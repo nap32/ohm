@@ -5,7 +5,6 @@
 #![allow(unused_assignments)]
 
 pub mod model;
-use crate::model::record::Record;
 use crate::model::traffic::Traffic;
 use crate::model::auth::AuthInfo;
 
@@ -52,7 +51,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 static CONFIG : OnceCell<Config> = OnceCell::new();
 static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new(); 
-static TRAFFIC_FILTER_CHAIN : OnceCell<Filter> = OnceCell::new();
+static FILTER_CHAIN : OnceCell<Filter> = OnceCell::new();
 
 #[tokio::main]
 async fn main() { 
@@ -65,7 +64,7 @@ async fn main() {
         Ok(()) => (),
         Err(e) => { panic!("Error setting Mongo"); },
     };
-    match TRAFFIC_FILTER_CHAIN.set(Filter::new().await) {
+    match FILTER_CHAIN.set(Filter::new().await) {
         Ok(()) => (),
         Err(e) => { panic!("Error setting Filter."); },
     };
@@ -105,12 +104,25 @@ async fn get_config_argument() -> String {
 
 #[cfg(test)]
 mod tests {
-   use super::*;
+    use super::*;
     
-   #[tokio::test]
-   async fn test_main() -> Result<(), Error> {
+    #[tokio::test]
+    async fn test_server_creation() -> Result<(), Error> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 8085));
+
+        let make_svc = make_service_fn(|_conn| async {
+            Ok::<_, Infallible>(service_fn(crate::service::proxy::handle_request))
+        });
+
+        let server = Server::bind(&addr)
+            .http1_preserve_header_case(true)
+            .http1_title_case_headers(true)
+            .serve(make_svc);
+
+        // TODO: .await( ) -> Close it down.
+
         Ok(())
-   }
+    }
 }
 
 

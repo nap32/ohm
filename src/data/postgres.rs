@@ -1,5 +1,4 @@
 
-use crate::model::record::Record;
 use crate::model::traffic::Traffic;
 use crate::data::Datastore;
 
@@ -21,8 +20,7 @@ impl Datastore for Postgres {
             Err(e) => Err(Box::new(e)),
         }
     }
-
-    async fn add_auth(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+    async fn add_authinfo(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
         // TO-DO.
         Ok(())
     }

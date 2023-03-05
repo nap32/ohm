@@ -1,8 +1,7 @@
 
 use crate::DATASTORE_CLIENT;
-use crate::TRAFFIC_FILTER_CHAIN;
+use crate::FILTER_CHAIN;
 use crate::service::ca::CA;
-use crate::model::record::Record;
 use crate::model::traffic::Traffic;
 use crate::model::auth::AuthInfo;
 use crate::data::mongo::Mongo;
@@ -139,10 +138,9 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
 }
 
 pub async fn process_traffic(traffic: &mut Traffic) {
-    let filter_chain = TRAFFIC_FILTER_CHAIN.get().expect("Traffic filtering chain not intialized.");
+    let filter_chain = FILTER_CHAIN.get().expect("Traffic filtering chain not intialized.");
     match filter_chain.filter(traffic).await{
         Ok(_) => {
-            let record = Record::new(traffic).await; // Modify your datastores to handle this next.
             store_traffic(traffic).await;
         },
         Err(_) => {
@@ -164,7 +162,8 @@ pub async fn store_traffic(traffic: &Traffic) {
 
 pub async fn store_auth(auth: &AuthInfo) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    let result = datastore.add_auth(&auth).await;
+    println!("{:?}", &auth);
+    let result = datastore.add_authinfo(&auth).await;
     match result {
         Ok(()) => {},
         Err(e) => {

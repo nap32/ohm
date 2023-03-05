@@ -17,6 +17,7 @@ pub struct AuthInfo {
     pub issuer          : String,
     pub client_id       : String,
     pub redirect_url    : String,
+    pub scope           : String,
 
     pub token_format    : String,
     pub token_key       : String,
@@ -27,6 +28,7 @@ impl PartialEq for AuthInfo {
         (self.grant_type == other.grant_type) &&
             (self.issuer == other.issuer) &&
             (self.client_id == other.client_id) &&
+            (self.scope == other.scope) &&
             (self.redirect_url == other.redirect_url) &&
             (self.token_format == other.token_format) &&
             (self.token_key == other.token_key) &&
@@ -48,6 +50,7 @@ impl AuthInfo {
         let mut grant_type = String::default();
         let mut client_id = String::default();
         let mut redirect_url = String::default();
+        let mut scope = String::default();
 
         issuer = traffic.host.clone();
 
@@ -60,12 +63,16 @@ impl AuthInfo {
         if query_pairs.contains_key("redirect_url") {
             redirect_url = query_pairs.get("redirect_url").unwrap().to_string();    
         }
+        if query_pairs.contains_key("scope") {
+            scope = query_pairs.get("scope").unwrap().to_string();
+        }
 
         Self {
             issuer,
             grant_type,
             client_id,
             redirect_url,
+            scope,
             token_format : String::default(),
             token_key    : String::default(),
             token_val    : String::default(),

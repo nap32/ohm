@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use once_cell::sync::OnceCell;
 use async_trait::async_trait;
 
-use crate::model::record::Record;
 use crate::data::Datastore;
 
 pub struct Redis {
@@ -17,7 +16,7 @@ impl Datastore for Redis {
         self.insert_traffic(traffic).await.unwrap();
         Ok(())
     }
-    async fn add_auth(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+    async fn add_authinfo(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
         // TO-DO.
         Ok(())
     }

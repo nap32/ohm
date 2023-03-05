@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::fmt;
 use serde::{Serialize, Deserialize};
@@ -249,14 +247,8 @@ impl Traffic {
 mod tests {
     use super::*; 
     
-    // Test coverage -- TODO:
-    // get_hyper_*
-    // get_query_map
-    // get_raw_*
-
     #[test]
     fn test_hyper_to_record() -> Result<(), std::io::Error> {
-        
         // Use module to convert hyper request+response to record.
         // Use module to convert record to hyper request+hyper response.
         // assert_eq!

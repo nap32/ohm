@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::Traffic;
 use crate::CONFIG;
 use crate::service::proxy;
@@ -14,15 +16,14 @@ use lazy_static::lazy_static;
 // Defining the type that a filtering function takes.
 type FilterFunction = fn(&mut Traffic) -> BoxFuture<'_, Result<(), ()>>;
 
-
 lazy_static! {
     static ref UUID_RE: Regex = Regex::new(r"^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$").unwrap();
-    static ref FLOAT_RE: Regex = Regex::new(r"^(?:\d+(?:\.\d*)?|\.\d+)$").unwrap();
+    static ref FLOAT_RE: Regex = Regex::new(r"^(?:\d+(?:\.\d*)|\.\d+)$").unwrap();
     static ref INT_RE: Regex = Regex::new(r"^[[:digit:]][[:digit:]]*$").unwrap();
 }
 
 pub struct Filter {
-    filters: Vec<FilterFunction> 
+    filters: Vec<FilterFunction>,
 }
 
 impl Filter {
@@ -50,7 +51,14 @@ impl Filter {
         }
         Ok(())
     }
+
 }
+
+/*
+ *
+ *  FILTERING FUNCTIONS:
+ *
+ */
 
 // Tokenize method has four parameters, but this can act as a flexible function instead of
 // writing one function per desired token or for each query + param etc.
