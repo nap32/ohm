@@ -16,7 +16,7 @@ impl Datastore for Redis {
         self.insert_traffic(traffic).await.unwrap();
         Ok(())
     }
-    async fn add_authinfo(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+    async fn add_authinfo(&self, _auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
         // TO-DO.
         Ok(())
     }
@@ -25,7 +25,7 @@ impl Redis {
     pub async fn new() -> Self {
         let db_url = &crate::CONFIG.get().unwrap().db.db_url;
         let client = redis::Client::open(db_url.clone()).unwrap();
-        let mut conn = client.get_connection().unwrap();
+        let conn = client.get_connection().unwrap();
         Self {
             client,
             conn

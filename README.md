@@ -13,7 +13,6 @@ The hope is that Ohm is flexible enough to support a variety of use-cases.
 What stands between Ohm and public release?
 
 - Need to revamp redis and postgres.
-- Need to handle record parsing.
 - Need to add record to database interface.
 - Need to support using other databases (mongo currently hardcoded).
 - Need a lot of testing coverage.

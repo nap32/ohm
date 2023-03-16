@@ -112,11 +112,11 @@ impl Traffic {
     }
 
     pub fn get_query_map(&self) -> HashMap<String, String> {
-        let mut query_string = self.query.clone();
+        let query_string = self.query.clone();
         let mut map = HashMap::<String, String>::new();
         for pair in query_string.split('&') {
             let mut query_param = pair.split('=').take(2);
-            let keyval = match (query_param.next(), query_param.next()) {
+            let _keyval = match (query_param.next(), query_param.next()) {
                 (Some(key), Some(val)) => {
                     map.insert(key.to_string(), val.to_string());
                 },
@@ -184,7 +184,7 @@ impl Traffic {
     }
 
     pub fn get_decoded_request_body(&self) -> std::string::String {
-        let mut line : String = String::new();
+        let _line : String = String::new();
         if self.request_headers.contains_key("content-encoding") {
             match self.request_headers["content-encoding"].as_str() {
                 "gzip" => {
@@ -224,7 +224,7 @@ impl Traffic {
     }
 
     pub fn get_decoded_response_body(&self) -> std::string::String {
-        let mut line : String = String::new();
+        let _line : String = String::new();
         if self.response_headers.contains_key("content-encoding") {
             match self.response_headers["content-encoding"].as_str() {
                 "gzip" => {

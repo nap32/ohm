@@ -39,11 +39,11 @@ impl Datastore for Mongo {
 impl Mongo {
 
     pub async fn new() -> Self {
-        let mut con = Self::get_connection().await.unwrap();
-        let mut database = Self::get_database(&con).await.unwrap();
-        let mut traffic_collection = Self::get_traffic_collection(&database).await.unwrap();
-        let mut auth_collection = Self::get_auth_collection(&database).await.unwrap();
-        let mut me = Self {
+        let con = Self::get_connection().await.unwrap();
+        let database = Self::get_database(&con).await.unwrap();
+        let traffic_collection = Self::get_traffic_collection(&database).await.unwrap();
+        let auth_collection = Self::get_auth_collection(&database).await.unwrap();
+        let me = Self {
             connection : con, 
             db : database, 
             traffic_collection,
@@ -86,8 +86,25 @@ impl Mongo {
         Ok(())
     }
 
-    pub async fn insert_auth(&self, auth : &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
-        self.auth_collection.insert_one(auth, None).await?;
+    pub async fn insert_auth(&self, _auth : &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
+        let filter = doc! {
+            "issuer": stringify!(auth.issuer),
+            "grant_type": stringify!(auth.grant_type),
+            "client_id": stringify!(auth.client_id),
+            "redirect_url": stringify!(auth.redirect_url),
+            "scope": stringify!(auth.scope),
+        };
+        let update = doc!{
+            "issuer": stringify!(auth.issuer),
+            "grant_type": stringify!(auth.grant_type),
+            "client_id": stringify!(auth.client_id),
+            "redirect_url": stringify!(auth.redirect_url),
+            "scope": stringify!(auth.scope),
+        };
+        let options = mongodb::options::FindOneAndUpdateOptions::builder()
+        .upsert(Some(true))
+        .build();
+        self.auth_collection.find_one_and_update(filter, update, Some(options)).await?;
         Ok(())
     }
 

@@ -1,8 +1,5 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(unused_assignments)]
 
 pub mod model;
 use crate::model::traffic::Traffic;
@@ -58,15 +55,15 @@ async fn main() {
 
     match CONFIG.set(Config::new(get_config_argument().await).await) {
         Ok(()) => (),
-        Err(e) => { panic!("Error setting Config."); },
+        Err(_e) => { panic!("Error setting Config."); },
     }
     match DATASTORE_CLIENT.set(Mongo::new().await) {
         Ok(()) => (),
-        Err(e) => { panic!("Error setting Mongo"); },
+        Err(_e) => { panic!("Error setting Mongo"); },
     };
     match FILTER_CHAIN.set(Filter::new().await) {
         Ok(()) => (),
-        Err(e) => { panic!("Error setting Filter."); },
+        Err(_e) => { panic!("Error setting Filter."); },
     };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], CONFIG.get().unwrap().net.port));

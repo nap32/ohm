@@ -18,10 +18,6 @@ pub struct AuthInfo {
     pub client_id       : String,
     pub redirect_url    : String,
     pub scope           : String,
-
-    pub token_format    : String,
-    pub token_key       : String,
-    pub token_val       : String,
 }
 impl PartialEq for AuthInfo {
     fn eq(&self, other: &Self) -> bool {
@@ -29,10 +25,7 @@ impl PartialEq for AuthInfo {
             (self.issuer == other.issuer) &&
             (self.client_id == other.client_id) &&
             (self.scope == other.scope) &&
-            (self.redirect_url == other.redirect_url) &&
-            (self.token_format == other.token_format) &&
-            (self.token_key == other.token_key) &&
-            (self.token_val == other.token_val)
+            (self.redirect_url == other.redirect_url)
     }
 }
 impl Eq for AuthInfo {}
@@ -46,13 +39,12 @@ impl AuthInfo {
     pub fn new(traffic : &mut Traffic) -> Self {
         let query_pairs = traffic.get_query_map();
 
-        let mut issuer = String::default();
         let mut grant_type = String::default();
         let mut client_id = String::default();
         let mut redirect_url = String::default();
         let mut scope = String::default();
 
-        issuer = traffic.host.clone();
+        let issuer = traffic.host.clone();
 
         if query_pairs.contains_key("response_type") {
             grant_type = query_pairs.get("response_type").unwrap().to_string();
@@ -60,11 +52,18 @@ impl AuthInfo {
         if query_pairs.contains_key("client_id") {
             client_id = query_pairs.get("client_id").unwrap().to_string();
         }
-        if query_pairs.contains_key("redirect_url") {
-            redirect_url = query_pairs.get("redirect_url").unwrap().to_string();    
-        }
         if query_pairs.contains_key("scope") {
             scope = query_pairs.get("scope").unwrap().to_string();
+        }
+
+        if traffic.response_headers.contains_key("location") {
+            match traffic.response_headers.get("location") {
+                Some(val) => {
+                    println!("{}", val);
+                    redirect_url = val.to_string();
+                },
+                None => { }
+            }
         }
 
         Self {
@@ -73,9 +72,6 @@ impl AuthInfo {
             client_id,
             redirect_url,
             scope,
-            token_format : String::default(),
-            token_key    : String::default(),
-            token_val    : String::default(),
         }
     }
 

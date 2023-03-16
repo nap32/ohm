@@ -29,8 +29,8 @@ use http::uri::{Authority, Scheme};
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
-    let mut response : Response<Body>;
-    let mut result : Result<Response<Body>, Error>; 
+    let response : Response<Body>;
+    let result : Result<Response<Body>, Error>; 
     if request.method() == Method::CONNECT {
         result = handle_connect(request).await;
     }else{
@@ -50,7 +50,7 @@ pub async fn handle_request(request: Request<Body>) -> Result<Response<Body>, In
 
 pub async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Error> {
     
-    if let Some(addr) = request.uri().authority().and_then(|auth| Some(auth.to_string())) {
+    if let Some(_addr) = request.uri().authority().and_then(|auth| Some(auth.to_string())) {
         tokio::task::spawn(async move {
             match hyper::upgrade::on(&mut request).await {
                 Ok(upgraded) => {
@@ -58,7 +58,7 @@ pub async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>
                     let proxy_config = ca.get_proxy_config(request).await.expect("Couldn't get proxy certificate.");
                     let stream = match TlsAcceptor::from(Arc::new(proxy_config)).accept(upgraded).await {
                             Ok(stream) => stream,
-                            Err(e) => { return },
+                            Err(_e) => { return },
                     };
                     if let Err(e) = serve_stream(stream).await {
                         if !e.to_string().starts_with("error shutting down connection") {
@@ -119,16 +119,16 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
 
-    let (mut request_browser, mut request_traffic) = clone_request(request).await.unwrap();
+    let (request_browser, request_traffic) = clone_request(request).await.unwrap();
 
-    let mut result = client.request(request_browser).await;
+    let result = client.request(request_browser).await;
     let mut response = Response::default();
     match result {
         Ok(t) => { response = t; },
         Err(e) => { println!("Err! {}", e); },
     }
 
-    let (mut response_browser, mut response_traffic) = clone_response(response).await.unwrap();
+    let (response_browser, response_traffic) = clone_response(response).await.unwrap();
     
     let mut traffic = Traffic::new(request_traffic, response_traffic).await;
     tokio::task::spawn(async move {
@@ -204,7 +204,7 @@ pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Req
 // "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
 // I don't think you can borrow as a reference, and it will be consumed when processing the body.
 // You need to extend the trait if it becomes a problem.
-pub async fn clone_response(mut response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
+pub async fn clone_response(response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
     let (parts, body) = response.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
     

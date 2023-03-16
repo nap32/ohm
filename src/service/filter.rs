@@ -139,7 +139,7 @@ pub async fn parse_utf8_request(traffic: &mut Traffic) -> Result<(), ()> {
             traffic.request_body_string = Some(request_body_string.to_string().clone());
             return Ok(())
         },
-        Err(e) => {
+        Err(_e) => {
             traffic.request_body_string = None;
             return Ok(())
         } 
@@ -152,7 +152,7 @@ pub async fn parse_utf8_response(traffic: &mut Traffic) -> Result<(), ()> {
             traffic.response_body_string = Some(response_body_string.to_string().clone());
             return Ok(())
         },
-        Err(e) => {
+        Err(_e) => {
             traffic.response_body_string = None;
             return Ok(())
         } 
@@ -169,7 +169,7 @@ pub async fn decompress_gzip(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers["content-encoding"] == "gzip".to_string()){
         return Ok(())
     }
-    let mut encoded_body = traffic.response_body.clone();
+    let encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new(); 
     let mut gz = GzDecoder::new(&encoded_body[..]);
     gz.read_to_end(&mut decoded_buffer).unwrap();
@@ -185,7 +185,7 @@ pub async fn decompress_deflate(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers["content-encoding"] == "deflate".to_string()) {
         return Ok(())
     }
-    let mut encoded_body = traffic.response_body.clone();
+    let encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new();
     let mut deflate = DeflateDecoder::new(&encoded_body[..]);
     deflate.read_to_end(&mut decoded_buffer).unwrap();
@@ -201,7 +201,7 @@ pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers["content_encoding"] == "br".to_string()) {
         return Ok(())
     }
-    let mut encoded_body = traffic.response_body.clone();
+    let encoded_body = traffic.response_body.clone();
     let mut decoded_buffer = Vec::new();
     let mut brotli = brotli::DecompressorWriter::new(&mut decoded_buffer[..], 4096);
     brotli.write_all(&encoded_body[..]).unwrap();
@@ -217,7 +217,6 @@ mod tests {
     
     #[tokio::test]
     async fn test_tokenize_uuid() -> Result<(), std::io::Error> {
-        let re = Regex::new(r"^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$").unwrap();
         let mut traffic = Traffic{
             method:"GET".to_string(),
             scheme:"https".to_string(),
@@ -306,7 +305,7 @@ s_b();
         };
 
         let encoded_body = traffic.response_body.clone();
-        let result = decompress_gzip(&mut traffic).await.unwrap();
+        let _result = decompress_gzip(&mut traffic).await.unwrap();
         let decoded_traffic = traffic.response_body.clone();
         println!("{}", std::str::from_utf8(&decoded_traffic).unwrap());
         assert_ne!(encoded_body, decoded_traffic);

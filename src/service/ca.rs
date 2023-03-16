@@ -35,7 +35,7 @@ impl CA {
         }
     }
 
-    pub async fn get_proxy_config(&mut self, mut request: Request<Body>) -> Result<ServerConfig, Error>{
+    pub async fn get_proxy_config(&mut self, request: Request<Body>) -> Result<ServerConfig, Error>{
         
         let authority = request
             .uri()
