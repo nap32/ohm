@@ -9,8 +9,6 @@ const APP_NAME : &str = "ohm";
 
 // Manage and store all datastore interactions.
 pub struct Mongo {
-    connection : mongodb::Client,
-    db : mongodb::Database,
     traffic_collection : mongodb::Collection<Traffic>,
     auth_collection : mongodb::Collection<AuthInfo>,
 }
@@ -39,8 +37,6 @@ impl Mongo {
         let traffic_collection = Self::get_traffic_collection(&database).await.unwrap();
         let auth_collection = Self::get_auth_collection(&database).await.unwrap();
         let me = Self {
-            connection : con, 
-            db : database, 
             traffic_collection,
             auth_collection,
         };

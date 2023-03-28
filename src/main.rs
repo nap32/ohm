@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod model;
 use crate::model::traffic::Traffic;
 use crate::model::auth::AuthInfo;
@@ -19,8 +17,6 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 
 use once_cell::sync::OnceCell;
-
-type Error = Box<dyn std::error::Error + Send + Sync>;
 
 static CONFIG : OnceCell<Config> = OnceCell::new();
 static DATASTORE_CLIENT : OnceCell<Mongo> = OnceCell::new(); 
@@ -78,6 +74,7 @@ async fn get_config_argument() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
     
     #[tokio::test]
     async fn test_server_creation() -> Result<(),  Error> {

@@ -2,8 +2,6 @@ use crate::Traffic;
 use std::fmt;
 use serde::{Serialize, Deserialize};
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthInfo {
     pub grant_type      : String,

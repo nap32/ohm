@@ -240,25 +240,3 @@ impl Traffic {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*; 
-    
-    #[test]
-    fn test_hyper_to_record() -> Result<(), std::io::Error> {
-        // Use module to convert hyper request+response to record.
-        // Use module to convert record to hyper request+hyper response.
-        // assert_eq!
-        Ok(())
-    }
-
-    #[test]
-    fn test_record_to_hyper() -> Result<(), std::io::Error> {
-        // Use module to convert record to hyper request+response.
-        // Use module to convert hyper request+response to record.
-        // assert_eq!
-        Ok(())
-    }
-
-}
