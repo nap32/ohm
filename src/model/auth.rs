@@ -1,13 +1,6 @@
 use crate::Traffic;
-
-use std::collections::HashMap;
 use std::fmt;
 use serde::{Serialize, Deserialize};
-use serde_json::Value;
-use hyper::{Request, Response, Body, StatusCode, Method};
-use flate2::read::GzDecoder;
-use std::io::prelude;
-use std::io::Read;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 

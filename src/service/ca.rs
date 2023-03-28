@@ -1,10 +1,7 @@
-
-use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
-use hyper_tls::HttpsConnector;
-use tokio_rustls::{TlsAcceptor, TlsStream};
+use hyper::{Body, Request};
 use tokio_rustls::rustls;
-use tokio_rustls::rustls::{ServerConfig, ConfigBuilder, PrivateKey};
-use http::uri::{Authority, Scheme};
+use tokio_rustls::rustls::ServerConfig;
+use http::uri::Authority;
 
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;

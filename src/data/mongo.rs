@@ -1,10 +1,5 @@
-use mongodb::{Client, Collection, Database, options::ClientOptions, bson::doc, options::FindOptions, options::UpdateOptions};
-use futures::stream::TryStreamExt; // Trait required for cursor.try_next().
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use once_cell::sync::OnceCell;
+use mongodb::{Client, options::ClientOptions, bson::doc};
 use async_trait::async_trait;
-use mongodb::bson;
 
 use crate::model::traffic::Traffic;
 use crate::model::auth::AuthInfo;

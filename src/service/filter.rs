@@ -2,14 +2,10 @@
 
 use crate::Traffic;
 use crate::CONFIG;
-use crate::service::proxy;
 
-use std::collections::HashMap;
-use std::io::{Read, Write, Error, ErrorKind};
-use tokio::net::{TcpStream, TcpListener};
-use flate2::{read::GzDecoder, read::DeflateDecoder, Decompress};
-use brotli::Decompressor;
-use futures::future::{Future, BoxFuture};
+use std::io::{Read, Write};
+use flate2::{read::GzDecoder, read::DeflateDecoder};
+use futures::future::BoxFuture;
 use regex::Regex;
 use lazy_static::lazy_static;
 
@@ -214,6 +210,7 @@ pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     
     #[tokio::test]
     async fn test_tokenize_uuid() -> Result<(), std::io::Error> {

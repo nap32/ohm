@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 
 pub mod mongo;
-pub mod postgres;
-pub mod redis;
 
 // https://smallcultfollowing.com/babysteps/blog/2019/10/26/async-fn-in-traits-are-hard/
 #[async_trait]

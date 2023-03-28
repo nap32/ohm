@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::fmt;
 use serde::{Serialize, Deserialize};
-use serde_json::Value;
-use hyper::{Request, Response, Body, StatusCode, Method};
+use hyper::Method;
 use flate2::read::GzDecoder;
-use std::io::prelude;
 use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

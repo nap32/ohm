@@ -170,3 +170,13 @@ Ohm is inspired by or has benefitted from the ideas or code contained in the fol
 
 Check out the `Cargo.toml` for a complete list of dependencies.\
 Thank you!
+
+# Learn More
+
+// https://hyper.rs/guides/server/hello-world/
+// https://hyper.rs/guides/client/advanced/
+// https://tokio.rs/tokio/tutorial/async
+// https://github.com/hyperium/hyper/blob/master/examples/upgrades.rs
+// https://github.com/hyperium/hyper/issues/1884
+// https://github.com/omjadas/hudsucker/blob/main/src/certificate_authority/openssl_authority.rs
+// https://docs.rs/crate/openssl/latest/source/examples/mk_certs.rs

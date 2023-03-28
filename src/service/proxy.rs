@@ -1,29 +1,21 @@
-
 use crate::DATASTORE_CLIENT;
 use crate::FILTER_CHAIN;
 use crate::service::ca::CA;
 use crate::model::traffic::Traffic;
 use crate::model::auth::AuthInfo;
-use crate::data::mongo::Mongo;
 use crate::data::Datastore;
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
 use std::sync::Arc;
-use std::io::Read;
 
-use hyper::{Body, Request, Response, Server, Client, Method, StatusCode, Uri};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::upgrade::Upgraded;
+use hyper::{Body, Request, Response, Client, Method, StatusCode, Uri};
+use hyper::service::service_fn;
 use hyper::server::conn::Http;
 
-use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpStream, TcpListener};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use hyper_tls::HttpsConnector;
-use tokio_rustls::{TlsAcceptor, TlsStream};
-use tokio_rustls::rustls;
-use tokio_rustls::rustls::{ServerConfig, ConfigBuilder, PrivateKey};
+use tokio_rustls::TlsAcceptor;
 use http::uri::{Authority, Scheme};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -228,3 +220,5 @@ pub async fn clone_response(response: Response<Body>) -> Result<(Response<Body>,
 
     return Ok((res1, res2))
 }
+
+// Maybe work to use generic types to hyper?
