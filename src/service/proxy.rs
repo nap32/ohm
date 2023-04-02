@@ -163,11 +163,8 @@ pub async fn store_auth(auth: &AuthInfo) {
     }
 }
 
-// This is tech debt. Implement .Copy() for hyper::traffic or find a better way.
-
-// "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
-// I don't think you can borrow as a reference, and it will be consumed when processing the body.
-// You need to extend the trait if it becomes a problem.
+// TODO: Implement .Copy() for hyper::traffic or find a better way.
+// "parts.extensions" is not cloned because it doesn't implement the trait and is left out here.
 
 pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
     let (parts, body) = request.into_parts();

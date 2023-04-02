@@ -90,10 +90,10 @@ impl Traffic {
         return me 
     }
 
-    pub fn get_key(&self) -> std::string::String {
-        let key = format!("{}:{}:{}", self.method, self.host, self.path);
-        return key
-    }
+    //pub fn get_key(&self) -> std::string::String {
+    //    let key = format!("{}:{}:{}", self.method, self.host, self.path);
+    //    return key
+    //}
 
     pub fn get_url(&self) -> std::string::String {
         let mut url : String = String::from(format!("{}://{}{}", self.scheme, self.host, self.path));
