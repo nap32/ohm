@@ -77,20 +77,22 @@ impl Mongo {
         Ok(())
     }
 
-    pub async fn insert_auth(&self, _auth : &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
+    pub async fn insert_auth(&self, auth : &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
         let filter = doc! {
-            "issuer": stringify!(auth.issuer),
-            "grant_type": stringify!(auth.grant_type),
-            "client_id": stringify!(auth.client_id),
-            "redirect_url": stringify!(auth.redirect_url),
-            "scope": stringify!(auth.scope),
+            "issuer": &auth.issuer,
+            "grant_type": &auth.grant_type,
+            "client_id": &auth.client_id,
+            "redirect_url": &auth.redirect_url,
+            "scope": &auth.scope,
         };
         let update = doc!{
-            "issuer": stringify!(auth.issuer),
-            "grant_type": stringify!(auth.grant_type),
-            "client_id": stringify!(auth.client_id),
-            "redirect_url": stringify!(auth.redirect_url),
-            "scope": stringify!(auth.scope),
+            "$set":{
+                "issuer": &auth.issuer,
+                "grant_type": &auth.grant_type,
+                "client_id": &auth.client_id,
+                "redirect_url": &auth.redirect_url,
+                "scope": &auth.scope,
+            }
         };
         let options = mongodb::options::FindOneAndUpdateOptions::builder()
         .upsert(Some(true))

@@ -54,7 +54,7 @@ pub async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>
                     };
                     if let Err(e) = serve_stream(stream).await {
                         if !e.to_string().starts_with("error shutting down connection") {
-                            println!("Handle Connect's serve_stream error! {}", e);
+                            println!("[ERROR] [src/service/proxy.rs] [handle_connect]: (serve_stream error!) {:?}", e);
                         }
                     }
                 },
@@ -63,7 +63,7 @@ pub async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>
         });
         Ok(Response::new(Body::empty()))
     }else{
-        eprintln!("CONNECT host is not a socket addr: {:?}", request.uri());
+        eprintln!("[ERROR] [src/service/proxy.rs] [handle_connect]: (CONNECT is not a socket addr): {:?}", request.uri());
         let mut response = Response::new(Body::from("CONNECT must be to a socket address."));
         *response.status_mut() = StatusCode::BAD_REQUEST;
         Ok(response)
@@ -117,7 +117,7 @@ pub async fn send_request(request: Request<Body>) -> Result<Response<Body>, Erro
     let mut response = Response::default();
     match result {
         Ok(t) => { response = t; },
-        Err(e) => { println!("Err! {}", e); },
+        Err(e) => { println!("[ERROR] [src/service/proxy.rs] [send_request]: {}", e); },
     }
 
     let (response_browser, response_traffic) = clone_response(response).await.unwrap();
@@ -147,24 +147,27 @@ pub async fn store_traffic(traffic: &Traffic) {
     match result {
         Ok(()) => {},
         Err(e) => {
-            println!("{:?}", e);
+            println!("[ERROR] [src/service/proxy.rs] [store_traffic]: {:?}", e);
         },
     }
 }
 
 pub async fn store_auth(auth: &AuthInfo) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    println!("{:?}", &auth);
     let result = datastore.add_authinfo(&auth).await;
     match result {
         Ok(()) => {},
         Err(e) => {
-            println!("{:?}", e);
+            println!("[ERROR] [src/service/proxy.rs] [store_auth]: {:?}", e);
         },
     }
 }
 
 // This is tech debt. Implement .Copy() for hyper::traffic or find a better way.
+
+// "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
+// I don't think you can borrow as a reference, and it will be consumed when processing the body.
+// You need to extend the trait if it becomes a problem.
 
 pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Request<Body>), Error> {
     let (parts, body) = request.into_parts();
@@ -193,9 +196,6 @@ pub async fn clone_request(request: Request<Body>) -> Result<(Request<Body>, Req
     return Ok((req1, req2))
 }
 
-// "parts.extensions" is not cloned because it doesn't implement the trait, and is left out here.
-// I don't think you can borrow as a reference, and it will be consumed when processing the body.
-// You need to extend the trait if it becomes a problem.
 pub async fn clone_response(response: Response<Body>) -> Result<(Response<Body>, Response<Body>), Error> {
     let (parts, body) = response.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
@@ -220,5 +220,3 @@ pub async fn clone_response(response: Response<Body>) -> Result<(Response<Body>,
 
     return Ok((res1, res2))
 }
-
-// Maybe work to use generic types to hyper?
