@@ -283,7 +283,6 @@ mod tests {
             response_body_string:None,
             version:"HTTP/1.1".to_string()
         };
-
         static ref TRAFFIC_TWO : Traffic = Traffic{
             method:"GET".to_string(),
             scheme:"https".to_string(),
@@ -291,7 +290,7 @@ mod tests {
             path:"/".to_string(),
             query:"".to_string(),
             request_headers: HashMap::from([
-                ("user-agent".to_string(),                      "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/110.0".to_string()),
+                ("user-agent".to_string(),                      "Mozilla/5.0".to_string()),
                 ("host".to_string(),                            "foobar.com".to_string()),
                 ("accept-encoding".to_string(),                 "gzip, deflate, br".to_string()),
                 ("accept-language".to_string(),                 "en-US,en;q=0.5".to_string()),
@@ -306,15 +305,38 @@ mod tests {
             response_body_string:None,
             version:"HTTP/1.1".to_string()
         };
+        static ref TRAFFIC_THREE : Traffic = Traffic{
+            method:"GET".to_string(),
+            scheme:"https".to_string(),
+            host:"foobar.com".to_string(),
+            path:"/".to_string(),
+            query:"".to_string(),
+            request_headers: HashMap::from([
+                ("user-agent".to_string(),                      "Mozilla/5.0".to_string()),
+                ("host".to_string(),                            "foobar.com".to_string()),
+                ("accept-encoding".to_string(),                 "gzip, deflate, br".to_string()),
+                ("accept-language".to_string(),                 "en-US,en;q=0.5".to_string()),
+                ("accept".to_string(),                          "*/*".to_string()),
+                ("connection".to_string(),                      "keep-alive".to_string()),
+            ]),
+            request_body:[].to_vec(),
+            request_body_string:Some("PING!".to_string()),
+            status:200,
+            response_headers: HashMap::from([]),
+            response_body:[].to_vec(),
+            response_body_string:Some("PONG!".to_string()),
+            version:"HTTP/1.1".to_string()
+        };
+
     }
 
     #[test]
     fn test_get_url() {
         assert_eq!(TRAFFIC_ONE.get_url(), "https://www.google.com/?xjs=s2");
         assert_eq!(TRAFFIC_TWO.get_url(), "https://foobar.com/");
-        assert_ne!(TRAFFIC_ONE.get_url(), TRAFFIC_TWO.get_url());
         assert_eq!(TRAFFIC_ONE.get_url(), TRAFFIC_ONE.get_url());
         assert_eq!(TRAFFIC_TWO.get_url(), TRAFFIC_TWO.get_url());
+        assert_ne!(TRAFFIC_ONE.get_url(), TRAFFIC_TWO.get_url());
     }
 
     #[test]

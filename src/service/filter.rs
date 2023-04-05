@@ -211,57 +211,35 @@ pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use crate::service::config::{Config, Net, Ca, Db, Filter};
     
-    #[tokio::test]
-    async fn test_tokenize_uuid() -> Result<(), std::io::Error> {
-        let mut traffic = Traffic{
-            method:"GET".to_string(),
-            scheme:"https".to_string(),
-            host:"www.foobar.com".to_string(),
-            path:"/f81d4fae-7dec-11d0-a765-00a0c91e6bf6/f83f4fae-7dec-11d4-a768-03a0d91e6bf6".to_string(),
-            query:"xjs=s2".to_string(),
-            request_headers: HashMap::from([
-                ("cookie".to_string(),                          "foo=bar".to_string()),
-                ("sec-fetch-site".to_string(),                  "same-origin".to_string()),
-                ("user-agent".to_string(),                      "Mozilla/5.0 (X11; Linux x86_64; rv:107.0) Gecko/20100101 Firefox/107.0".to_string()),
-                ("host".to_string(),                            "www.google.com".to_string()),
-            ]),
-            request_body:[].to_vec(),
-            request_body_string:None,
-            status:200,
-            response_headers: HashMap::from([
-                ("vary".to_string(),                            "Accept-Encoding, Origin".to_string()),
-            ]),
-            response_body:[].to_vec(),
-            response_body_string:None,
-            version:"HTTP/1.1".to_string()
-
+    lazy_static! {
+        // Mocked config
+        static ref CONFIG : Config = Config{
+            net : Net{
+                port : 320
+            },
+            ca : Ca{
+                pem_relative_path : "../foo.pem".to_string(),
+                key_relative_path : "../bar.key".to_string()
+            },
+            db : Db{
+                db_url : "mongodb://127.0.0.1:27017".to_string(),
+                app_name : "foobar".to_string(),
+                db_name : "ohm".to_string(),
+                traffic_collection_name : "traffic".to_string(),
+                auth_collection_name : "authinfo".to_string(),
+            },
+            filter : Filter{
+                allow_list_hosts : ["foobar.com".to_string()].to_vec(),
+                deny_list_hosts : ["evil.com".to_string()].to_vec(),
+                identity_providers : ["sso.foobar.com".to_string()].to_vec(),
+            }
         };
-        let _ = tokenize(&mut traffic.path, "/", "<:UUID>", &UUID_RE).await;
-        assert_eq!(traffic.path, "/<:UUID>/<:UUID>");
-        Ok(())
     }
 
-    #[tokio::test]
-    async fn test_decompress_gzip() -> Result<(), std::io::Error> {
-        let decoded_string = r###"try{
-s_a("i9SNBf");
-var s_EGf=s_H("dXIA6");var s_FGf=function(a){s_o.call(this,a.Ka);this.rootElement=this.getRoot().el();this.RQ=s_K(this,"MPu53c").el();if(a=s_Rq(this.rootElement,"labelledby")){var b=document.getElementById(a);b&&(b.setAttribute("for",this.RQ.getAttribute("id")),s_Pq(this.RQ,"labelledby",a))}};s_w(s_FGf,s_o);s_FGf.Fa=s_o.Fa;s_FGf.prototype.Hm=function(a,b){this.RQ.checked!==a&&(this.RQ.checked=a,(void 0===b||b)&&this.trigger(s_EGf))};s_T(s_4Ta,s_FGf);
-s_b();
-}catch(e){_DumpException(e)}
-try{
-var s_ETd=s_H("Lhx8ef");
-}catch(e){_DumpException(e)}
-try{
-s_a("w4UyN");
-var s_7R=function(a){s_o.call(this,a.Ka);this.ka=!1;this.oa=s_Ib("elPddd");this.rootElement=this.getRoot().el()};s_w(s_7R,s_o);s_7R.Fa=s_o.Fa;s_7R.prototype.vmf=function(){""===s_i.getStyle(this.oa,"transform")?(s_U(this.rootElement),s_xd(document,s_ETd),this.ka||(this.gA(),this.ka=!0)):s_i.setStyle(this.oa,"transform","");this.Ua("suEOdc").setStyle("visibility","hidden")};s_7R.prototype.showTooltip=function(){this.Ua("suEOdc").setStyle("visibility","inherit")};
-s_7R.prototype.uj=function(){this.Ua("suEOdc").setStyle("visibility","hidden")};s_7R.prototype.gA=function(){var a=s_Bx(new s_Ax,s_Dx(new s_Cx,134634));s_xd(document,s_Ex,{q4:a})};s_L(s_7R.prototype,"LfDNce",function(){return this.uj});s_L(s_7R.prototype,"eGiyHb",function(){return this.showTooltip});s_L(s_7R.prototype,"HfCvm",function(){return this.vmf});s_T(s_KRa,s_7R);
-s_b();
-}catch(e){_DumpException(e)}
-// Google Inc.
-"###; 
-
-        let mut traffic = Traffic{
+    lazy_static! {
+        static ref TRAFFIC_ONE : Traffic = Traffic{
             method:"GET".to_string(),
             scheme:"https".to_string(),
             host:"www.google.com".to_string(),
@@ -300,13 +278,114 @@ s_b();
             response_body_string:None,
             version:"HTTP/1.1".to_string()
         };
+        static ref TRAFFIC_TWO : Traffic = Traffic{
+            method:"GET".to_string(),
+            scheme:"https".to_string(),
+            host:"foobar.com".to_string(),
+            path:"/".to_string(),
+            query:"".to_string(),
+            request_headers: HashMap::from([
+                ("user-agent".to_string(),                      "Mozilla/5.0".to_string()),
+                ("host".to_string(),                            "foobar.com".to_string()),
+                ("accept-encoding".to_string(),                 "gzip, deflate, br".to_string()),
+                ("accept-language".to_string(),                 "en-US,en;q=0.5".to_string()),
+                ("accept".to_string(),                          "*/*".to_string()),
+                ("connection".to_string(),                      "keep-alive".to_string()),
+            ]),
+            request_body:[].to_vec(),
+            request_body_string:None,
+            status:200,
+            response_headers: HashMap::from([]),
+            response_body:[].to_vec(),
+            response_body_string:None,
+            version:"HTTP/1.1".to_string()
+        };
+        static ref TRAFFIC_THREE : Traffic = Traffic{
+            method:"GET".to_string(),
+            scheme:"https".to_string(),
+            host:"foobar.com".to_string(),
+            path:"/".to_string(),
+            query:"".to_string(),
+            request_headers: HashMap::from([
+                ("user-agent".to_string(),                      "Mozilla/5.0".to_string()),
+                ("host".to_string(),                            "foobar.com".to_string()),
+                ("accept-encoding".to_string(),                 "gzip, deflate, br".to_string()),
+                ("accept-language".to_string(),                 "en-US,en;q=0.5".to_string()),
+                ("accept".to_string(),                          "*/*".to_string()),
+                ("connection".to_string(),                      "keep-alive".to_string()),
+            ]),
+            request_body:[].to_vec(),
+            request_body_string:Some("PING!".to_string()),
+            status:200,
+            response_headers: HashMap::from([]),
+            response_body:[].to_vec(),
+            response_body_string:Some("PONG!".to_string()),
+            version:"HTTP/1.1".to_string()
+        };
+        static ref TRAFFIC_FOUR : Traffic = Traffic{
+            method:"GET".to_string(),
+            scheme:"https".to_string(),
+            host:"www.foobar.com".to_string(),
+            path:"/f81d4fae-7dec-11d0-a765-00a0c91e6bf6/f83f4fae-7dec-11d4-a768-03a0d91e6bf6".to_string(),
+            query:"xjs=s2".to_string(),
+            request_headers: HashMap::from([
+                ("cookie".to_string(),                          "foo=bar".to_string()),
+                ("sec-fetch-site".to_string(),                  "same-origin".to_string()),
+                ("user-agent".to_string(),                      "Mozilla/5.0 (X11; Linux x86_64; rv:107.0) Gecko/20100101 Firefox/107.0".to_string()),
+                ("host".to_string(),                            "www.google.com".to_string()),
+            ]),
+            request_body:[].to_vec(),
+            request_body_string:None,
+            status:200,
+            response_headers: HashMap::from([
+                ("vary".to_string(),                            "Accept-Encoding, Origin".to_string()),
+            ]),
+            response_body:[].to_vec(),
+            response_body_string:None,
+            version:"HTTP/1.1".to_string()
 
+        };
+    }
+
+
+    #[tokio::test]
+    async fn test_tokenize_uuid() -> Result<(), std::io::Error> {
+        let mut traffic = TRAFFIC_FOUR.clone();
+        let _ = tokenize(&mut traffic.path, "/", "<:UUID>", &UUID_RE).await;
+        assert_eq!(traffic.path, "/<:UUID>/<:UUID>");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_identity_providers() {
+
+    }
+
+    #[tokio::test]
+    async fn test_decompress_gzip() -> Result<(), std::io::Error> {
+        let decoded_string = r###"try{
+s_a("i9SNBf");
+var s_EGf=s_H("dXIA6");var s_FGf=function(a){s_o.call(this,a.Ka);this.rootElement=this.getRoot().el();this.RQ=s_K(this,"MPu53c").el();if(a=s_Rq(this.rootElement,"labelledby")){var b=document.getElementById(a);b&&(b.setAttribute("for",this.RQ.getAttribute("id")),s_Pq(this.RQ,"labelledby",a))}};s_w(s_FGf,s_o);s_FGf.Fa=s_o.Fa;s_FGf.prototype.Hm=function(a,b){this.RQ.checked!==a&&(this.RQ.checked=a,(void 0===b||b)&&this.trigger(s_EGf))};s_T(s_4Ta,s_FGf);
+s_b();
+}catch(e){_DumpException(e)}
+try{
+var s_ETd=s_H("Lhx8ef");
+}catch(e){_DumpException(e)}
+try{
+s_a("w4UyN");
+var s_7R=function(a){s_o.call(this,a.Ka);this.ka=!1;this.oa=s_Ib("elPddd");this.rootElement=this.getRoot().el()};s_w(s_7R,s_o);s_7R.Fa=s_o.Fa;s_7R.prototype.vmf=function(){""===s_i.getStyle(this.oa,"transform")?(s_U(this.rootElement),s_xd(document,s_ETd),this.ka||(this.gA(),this.ka=!0)):s_i.setStyle(this.oa,"transform","");this.Ua("suEOdc").setStyle("visibility","hidden")};s_7R.prototype.showTooltip=function(){this.Ua("suEOdc").setStyle("visibility","inherit")};
+s_7R.prototype.uj=function(){this.Ua("suEOdc").setStyle("visibility","hidden")};s_7R.prototype.gA=function(){var a=s_Bx(new s_Ax,s_Dx(new s_Cx,134634));s_xd(document,s_Ex,{q4:a})};s_L(s_7R.prototype,"LfDNce",function(){return this.uj});s_L(s_7R.prototype,"eGiyHb",function(){return this.showTooltip});s_L(s_7R.prototype,"HfCvm",function(){return this.vmf});s_T(s_KRa,s_7R);
+s_b();
+}catch(e){_DumpException(e)}
+// Google Inc.
+"###; 
+
+        let mut traffic = TRAFFIC_ONE.clone();
         let encoded_body = traffic.response_body.clone();
         let _result = decompress_gzip(&mut traffic).await.unwrap();
-        let decoded_traffic = traffic.response_body.clone();
-        println!("{}", std::str::from_utf8(&decoded_traffic).unwrap());
-        assert_ne!(encoded_body, decoded_traffic);
-        assert_eq!(decoded_string, std::str::from_utf8(&decoded_traffic).unwrap());
+        let decoded_body = traffic.response_body.clone();
+        assert_ne!(encoded_body, decoded_body);
+        assert_eq!(decoded_string, std::str::from_utf8(&decoded_body).unwrap());
         Ok(())
     }
 
