@@ -90,11 +90,6 @@ impl Traffic {
         return me 
     }
 
-    //pub fn get_key(&self) -> std::string::String {
-    //    let key = format!("{}:{}:{}", self.method, self.host, self.path);
-    //    return key
-    //}
-
     pub fn get_url(&self) -> std::string::String {
         let mut url : String = String::from(format!("{}://{}{}", self.scheme, self.host, self.path));
         if !self.query.is_empty() {
@@ -157,8 +152,9 @@ impl Traffic {
         let mut request : String = String::new();
         request.push_str(&self.get_raw_request_title());
         request.push_str(&self.get_raw_request_headers());
-        request.push('\n');
         request.push_str(&self.get_decoded_request_body());
+        request.push_str("\r\n");
+        request.push_str("\r\n");
         request
     }
 
@@ -169,14 +165,14 @@ impl Traffic {
         line.push_str(&self.get_url());
         line.push(' ');
         line.push_str(&self.version);
-        line.push('\n');
+        line.push_str("\r\n");
         line
     }
 
     pub fn get_raw_request_headers(&self) -> std::string::String {
         let mut line : String = String::new();
         for (key, val) in &self.request_headers {
-            line.push_str(format!("{}: {}\n", &key, &val).as_str());
+            line.push_str(format!("{}: {}\r\n", &key, &val).as_str());
         }
         line
     }
@@ -204,19 +200,20 @@ impl Traffic {
         let mut response : String = String::new();
         response.push_str(&self.get_raw_response_title());
         response.push_str(&self.get_raw_response_headers());
-        response.push('\n');
         response.push_str(&self.get_decoded_response_body());
+        response.push_str("\r\n");
+        response.push_str("\r\n");
         response
     }
 
     pub fn get_raw_response_title(&self) -> std::string::String {
-        format!("{} {}\n", &self.version, &self.status)
+        format!("{} {}\r\n", &self.version, &self.status)
     }
 
     pub fn get_raw_response_headers(&self) -> std::string::String {
         let mut line : String = String::new();
         for (key, val) in &self.response_headers {
-            line.push_str(format!("{}: {}\n", &key, &val).as_str());
+            line.push_str(format!("{}: {}\r\n", &key, &val).as_str());
         }
         line
     }

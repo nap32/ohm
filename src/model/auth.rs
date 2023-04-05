@@ -47,10 +47,11 @@ impl AuthInfo {
             scope = query_pairs.get("scope").unwrap().to_string();
         }
 
-        if traffic.response_headers.contains_key("location") {
+        if query_pairs.contains_key("redirect_url") {
+            redirect_url = query_pairs.get("redirect_url").unwrap().to_string();
+        } else if traffic.status > 300 && traffic.status <= 400 && traffic.response_headers.contains_key("location") {
             match traffic.response_headers.get("location") {
                 Some(val) => {
-                    println!("{}", val);
                     redirect_url = val.to_string();
                 },
                 None => { }
