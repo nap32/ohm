@@ -1,12 +1,12 @@
 # Ω Ohm
 ## About
 \
-A HTTP / HTTPS intercepting proxy that stores traffic in a database.\
-Built as a passive proxy with a focus on fast performance, safe design, and flexible usage.\
-Increase observability into your traffic and support automation efforts by passively recording test cases you generate.\
-Capable of supporting usage locally client-side to record browser traffic or server-side for selective traffic logging.\
-A filtering chain provides powerful capabilities to handle decision making on traffic ingestion, safely handling identity provider traffic, or regex string replacement.\
-The same filtering chain decodes gzip, brotli, or deflate encodings to make the recorded traffic easy to work with for database searches or automation.
+- A HTTP / HTTPS intercepting proxy that stores traffic in a database.\
+- Built as a passive proxy with a focus on fast performance, safe design, and flexible usage.\
+- Increase observability into your traffic and support automation efforts by passively recording test cases you generate.\
+- Capable of supporting usage locally client-side to record browser traffic or server-side for selective traffic logging.\
+- A filtering chain provides powerful capabilities to handle decision making on traffic ingestion, safely handling identity provider traffic, or regex string replacement.\
+- The same filtering chain decodes gzip, brotli, or deflate encodings to make the recorded traffic easy to work with for database searches or automation.
 
 ## Setup
 

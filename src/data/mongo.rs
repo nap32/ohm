@@ -1,27 +1,30 @@
-use mongodb::{Client, options::ClientOptions, bson::doc};
 use async_trait::async_trait;
+use mongodb::{bson::doc, options::ClientOptions, Client};
 
-use crate::model::traffic::Traffic;
-use crate::model::auth::AuthInfo;
 use crate::data::Datastore;
+use crate::model::auth::AuthInfo;
+use crate::model::traffic::Traffic;
 
-const APP_NAME : &str = "ohm";
+const APP_NAME: &str = "ohm";
 
 // Manage and store all datastore interactions.
 pub struct Mongo {
-    traffic_collection : mongodb::Collection<Traffic>,
-    auth_collection : mongodb::Collection<AuthInfo>,
+    traffic_collection: mongodb::Collection<Traffic>,
+    auth_collection: mongodb::Collection<AuthInfo>,
 }
 
 #[async_trait]
 impl Datastore for Mongo {
-    async fn add_traffic(&self, traffic : &crate::Traffic) -> Result<(), Box<dyn std::error::Error>> {
+    async fn add_traffic(
+        &self,
+        traffic: &crate::Traffic,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         match self.insert_traffic(&traffic).await {
             Ok(()) => Ok(()),
             Err(e) => Err(Box::new(e)),
         }
     }
-    async fn add_authinfo(&self, auth : &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
+    async fn add_authinfo(&self, auth: &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
         match self.insert_auth(&auth).await {
             Ok(()) => Ok(()),
             Err(e) => Err(Box::new(e)),
@@ -30,7 +33,6 @@ impl Datastore for Mongo {
 }
 
 impl Mongo {
-
     pub async fn new() -> Self {
         let con = Self::get_connection().await.unwrap();
         let database = Self::get_database(&con).await.unwrap();
@@ -40,11 +42,10 @@ impl Mongo {
             traffic_collection,
             auth_collection,
         };
-        return me
+        return me;
     }
 
-    async fn get_connection() -> Result<mongodb::Client, mongodb::error::Error>{
-
+    async fn get_connection() -> Result<mongodb::Client, mongodb::error::Error> {
         let db_url = &crate::CONFIG.get().unwrap().db.db_url;
 
         // Parse a connection string into an options struct.
@@ -55,29 +56,37 @@ impl Mongo {
         Ok(client)
     }
 
-    async fn get_database(client : &mongodb::Client) -> Result<mongodb::Database, mongodb::error::Error>{
+    async fn get_database(
+        client: &mongodb::Client,
+    ) -> Result<mongodb::Database, mongodb::error::Error> {
         let db_name = &crate::CONFIG.get().unwrap().db.db_name;
-        let db = Some(client.database(db_name)); 
+        let db = Some(client.database(db_name));
         Ok(db.unwrap())
     }
 
-    async fn get_traffic_collection(db : &mongodb::Database) -> Result<mongodb::Collection<Traffic>, mongodb::error::Error> {
+    async fn get_traffic_collection(
+        db: &mongodb::Database,
+    ) -> Result<mongodb::Collection<Traffic>, mongodb::error::Error> {
         let collection_name = &crate::CONFIG.get().unwrap().db.traffic_collection_name;
         Ok(db.collection::<Traffic>(collection_name))
     }
 
-    async fn get_auth_collection(db : &mongodb::Database) -> Result<mongodb::Collection<AuthInfo>, mongodb::error::Error> {
+    async fn get_auth_collection(
+        db: &mongodb::Database,
+    ) -> Result<mongodb::Collection<AuthInfo>, mongodb::error::Error> {
         let collection_name = &crate::CONFIG.get().unwrap().db.auth_collection_name;
         Ok(db.collection::<AuthInfo>(collection_name))
     }
 
-
-    pub async fn insert_traffic(&self, traffic : &crate::Traffic) -> Result<(), mongodb::error::Error> {
+    pub async fn insert_traffic(
+        &self,
+        traffic: &crate::Traffic,
+    ) -> Result<(), mongodb::error::Error> {
         self.traffic_collection.insert_one(traffic, None).await?;
         Ok(())
     }
 
-    pub async fn insert_auth(&self, auth : &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
+    pub async fn insert_auth(&self, auth: &crate::AuthInfo) -> Result<(), mongodb::error::Error> {
         let filter = doc! {
             "issuer": &auth.issuer,
             "grant_type": &auth.grant_type,
@@ -85,7 +94,7 @@ impl Mongo {
             "redirect_url": &auth.redirect_url,
             "scope": &auth.scope,
         };
-        let update = doc!{
+        let update = doc! {
             "$set":{
                 "issuer": &auth.issuer,
                 "grant_type": &auth.grant_type,
@@ -95,10 +104,11 @@ impl Mongo {
             }
         };
         let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .upsert(Some(true))
-        .build();
-        self.auth_collection.find_one_and_update(filter, update, Some(options)).await?;
+            .upsert(Some(true))
+            .build();
+        self.auth_collection
+            .find_one_and_update(filter, update, Some(options))
+            .await?;
         Ok(())
     }
-
 }

@@ -1,2 +1,2 @@
-pub mod traffic;
 pub mod auth;
+pub mod traffic;

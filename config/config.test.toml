@@ -1,0 +1,26 @@
+[net]
+port = 8085
+
+[ca]
+pem_relative_path = "./config/ohm.pem"
+key_relative_path = "./config/ohm.key"
+
+[db]
+db_url = "mongodb://localhost:27017"
+app_name = "ohm"
+db_name = "ohm"
+traffic_collection_name = "traffic"
+auth_collection_name = "authinfo"
+
+[filter]
+allow_list_hosts = [
+    "foobar.com",
+]
+deny_list_hosts = [
+    "google.com",
+    "firefox.com",
+    "mozilla.com",
+]
+identity_providers = [
+    "sso.foobar.com",
+]
