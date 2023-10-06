@@ -61,7 +61,7 @@ impl Traffic {
             response_headers: HashMap::<std::string::String, std::string::String>::new(),
             response_body: Vec::<u8>::new(),
             response_body_string: None,
-            version : match request.version() {
+            version: match request.version() {
                 hyper::Version::HTTP_2 => "HTTP/2.0".to_string(),
                 hyper::Version::HTTP_3 => "HTTP/3.0".to_string(),
                 hyper::Version::HTTP_10 => "HTTP/1.0".to_string(),
@@ -89,11 +89,11 @@ impl Traffic {
             .await
             .unwrap()
             .to_vec();
-        return me;
+        me
     }
 
     pub fn get_url(&self) -> std::string::String {
-        let mut url: String = String::from(format!("{}://{}{}", self.scheme, self.host, self.path));
+        let mut url: String = format!("{}://{}{}", self.scheme, self.host, self.path);
         if !self.query.is_empty() {
             url.push('?');
             url.push_str(&self.query);
@@ -102,8 +102,7 @@ impl Traffic {
     }
 
     pub fn get_json(&self) -> std::string::String {
-        let serialized = serde_json::to_string(&self).unwrap();
-        return serialized;
+        serde_json::to_string(&self).unwrap()
     }
 
     pub fn get_query_map(&self) -> HashMap<String, String> {
@@ -111,7 +110,7 @@ impl Traffic {
         let mut map = HashMap::<String, String>::new();
         for pair in query_string.split('&') {
             let mut query_param = pair.split('=').take(2);
-            let _keyval = match (query_param.next(), query_param.next()) {
+            match (query_param.next(), query_param.next()) {
                 (Some(key), Some(val)) => {
                     map.insert(key.to_string(), val.to_string());
                 }
@@ -134,7 +133,7 @@ impl Traffic {
         let request = request
             .body(hyper::Body::from(self.request_body.clone()))
             .unwrap();
-        return Ok(request);
+        Ok(request)
     }
 
     pub fn get_hyper_response(&self) -> Result<hyper::Response<hyper::Body>, std::io::Error> {
@@ -145,7 +144,7 @@ impl Traffic {
         let request = response
             .body(hyper::Body::from(self.response_body.clone()))
             .unwrap();
-        return Ok(request);
+        Ok(request)
     }
 
     pub fn get_hyper_pair(
@@ -153,7 +152,7 @@ impl Traffic {
     ) -> Result<(hyper::Request<hyper::Body>, hyper::Response<hyper::Body>), std::io::Error> {
         let request = self.get_hyper_request().unwrap();
         let response = self.get_hyper_response().unwrap();
-        return Ok((request, response));
+        Ok((request, response))
     }
 
     pub fn get_raw_request(&self) -> std::string::String {
@@ -193,7 +192,7 @@ impl Traffic {
                     let mut body = String::new();
                     let mut gz = GzDecoder::new(&*self.request_body);
                     gz.read_to_string(&mut body).unwrap();
-                    return body;
+                    body
                 }
                 _ => {
                     panic!(
@@ -203,7 +202,7 @@ impl Traffic {
                 }
             }
         } else {
-            return stringify!(self.request_body).to_string();
+            stringify!(self.request_body).to_string()
         }
     }
 
@@ -237,7 +236,7 @@ impl Traffic {
                     let mut body = String::new();
                     let mut gz = GzDecoder::new(&*self.response_body);
                     gz.read_to_string(&mut body).unwrap();
-                    return body;
+                    body
                 }
                 _ => {
                     panic!(
@@ -247,7 +246,7 @@ impl Traffic {
                 }
             }
         } else {
-            return stringify!(self.response_body).to_string();
+            stringify!(self.response_body).to_string()
         }
     }
 }

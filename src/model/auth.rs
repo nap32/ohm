@@ -52,11 +52,8 @@ impl AuthInfo {
             && traffic.status <= 400
             && traffic.response_headers.contains_key("location")
         {
-            match traffic.response_headers.get("location") {
-                Some(val) => {
-                    redirect_url = val.to_string();
-                }
-                None => {}
+            if let Some(val) = traffic.response_headers.get("location") {
+                redirect_url = val.to_string();
             }
         }
 
@@ -70,7 +67,6 @@ impl AuthInfo {
     }
 
     pub fn get_json(&self) -> std::string::String {
-        let serialized = serde_json::to_string(&self).unwrap();
-        return serialized;
+        serde_json::to_string(&self).unwrap()
     }
 }

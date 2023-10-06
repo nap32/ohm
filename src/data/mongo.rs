@@ -19,13 +19,13 @@ impl Datastore for Mongo {
         &self,
         traffic: &crate::Traffic,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        match self.insert_traffic(&traffic).await {
+        match self.insert_traffic(traffic).await {
             Ok(()) => Ok(()),
             Err(e) => Err(Box::new(e)),
         }
     }
     async fn add_authinfo(&self, auth: &crate::AuthInfo) -> Result<(), Box<dyn std::error::Error>> {
-        match self.insert_auth(&auth).await {
+        match self.insert_auth(auth).await {
             Ok(()) => Ok(()),
             Err(e) => Err(Box::new(e)),
         }
@@ -38,11 +38,10 @@ impl Mongo {
         let database = Self::get_database(&con).await.unwrap();
         let traffic_collection = Self::get_traffic_collection(&database).await.unwrap();
         let auth_collection = Self::get_auth_collection(&database).await.unwrap();
-        let me = Self {
+        Self {
             traffic_collection,
             auth_collection,
-        };
-        return me;
+        }
     }
 
     async fn get_connection() -> Result<mongodb::Client, mongodb::error::Error> {
