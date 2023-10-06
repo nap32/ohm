@@ -22,12 +22,11 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
     let response: Response<Body>;
-    let result: Result<Response<Body>, Error>;
-    if request.method() == Method::CONNECT {
-        result = handle_connect(request).await;
+    let result: Result<Response<Body>, Error> = if request.method() == Method::CONNECT {
+        handle_connect(request).await
     } else {
-        result = send_request(request).await;
-    }
+        send_request(request).await
+    };
     match result {
         Ok(t) => response = t,
         Err(e) => {
@@ -37,15 +36,11 @@ pub async fn handle_request(request: Request<Body>) -> Result<Response<Body>, In
                 .unwrap();
         }
     }
-    return Ok(response);
+    Ok(response)
 }
 
 pub async fn handle_connect(mut request: Request<Body>) -> Result<Response<Body>, Error> {
-    if let Some(_addr) = request
-        .uri()
-        .authority()
-        .and_then(|auth| Some(auth.to_string()))
-    {
+    if let Some(_addr) = request.uri().authority().map(|auth| auth.to_string()) {
         tokio::task::spawn(async move {
             match hyper::upgrade::on(&mut request).await {
                 Ok(upgraded) => {
@@ -150,17 +145,14 @@ pub async fn process_traffic(traffic: &mut Traffic) {
     let filter_chain = FILTER_CHAIN
         .get()
         .expect("Traffic filtering chain not intialized.");
-    match filter_chain.filter(traffic).await {
-        Ok(_) => {
-            store_traffic(traffic).await;
-        }
-        Err(_) => { /* Filtering chain dropped traffic. */ }
+    if (filter_chain.filter(traffic).await).is_ok() {
+        store_traffic(traffic).await
     }
 }
 
 pub async fn store_traffic(traffic: &Traffic) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    let result = datastore.add_traffic(&traffic).await;
+    let result = datastore.add_traffic(traffic).await;
     match result {
         Ok(()) => {}
         Err(e) => {
@@ -171,7 +163,7 @@ pub async fn store_traffic(traffic: &Traffic) {
 
 pub async fn store_auth(auth: &AuthInfo) {
     let datastore = DATASTORE_CLIENT.get().expect("Datastore not initialized.");
-    let result = datastore.add_authinfo(&auth).await;
+    let result = datastore.add_authinfo(auth).await;
     match result {
         Ok(()) => {}
         Err(e) => {
@@ -192,7 +184,7 @@ pub async fn clone_request(
     let mut req1 = Request::builder()
         .uri(parts.uri.clone())
         .method(parts.method.clone())
-        .version(parts.version.clone());
+        .version(parts.version);
     {
         let headers = req1.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
@@ -202,14 +194,14 @@ pub async fn clone_request(
     let mut req2 = Request::builder()
         .uri(parts.uri.clone())
         .method(parts.method.clone())
-        .version(parts.version.clone());
+        .version(parts.version);
     {
         let headers = req2.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
     let req2 = req2.body(Body::from(body_bytes.clone()))?;
 
-    return Ok((req1, req2));
+    Ok((req1, req2))
 }
 
 pub async fn clone_response(
@@ -219,8 +211,8 @@ pub async fn clone_response(
     let body_bytes = hyper::body::to_bytes(body).await?;
 
     let mut res1 = Response::builder()
-        .status(parts.status.clone())
-        .version(parts.version.clone());
+        .status(parts.status)
+        .version(parts.version);
     {
         let headers = res1.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
@@ -228,13 +220,13 @@ pub async fn clone_response(
     let res1 = res1.body(Body::from(body_bytes.clone()))?;
 
     let mut res2 = Response::builder()
-        .status(parts.status.clone())
-        .version(parts.version.clone());
+        .status(parts.status)
+        .version(parts.version);
     {
         let headers = res2.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
     let res2 = res2.body(Body::from(body_bytes.clone()))?;
 
-    return Ok((res1, res2));
+    Ok((res1, res2))
 }

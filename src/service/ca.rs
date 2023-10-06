@@ -48,13 +48,10 @@ impl CA {
 
     async fn create_server_config(&mut self, authority: &Authority) -> Result<ServerConfig, Error> {
         let result = self.create_proxy_certificate(authority).await;
-        let cert: rustls::Certificate;
-        match result {
-            Ok(t) => {
-                cert = t;
-            }
+        let cert: rustls::Certificate = match result {
+            Ok(t) => t,
             Err(e) => return Err(e),
-        }
+        };
 
         let private_key = rustls::PrivateKey(
             self.signing_key

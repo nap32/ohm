@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
 use crate::Traffic;
 use crate::CONFIG;
 
@@ -70,11 +70,11 @@ pub async fn tokenize(
     for mut token in source_str.split(source_delimiter) {
         token = token
             .strip_suffix("\r\n")
-            .or(token.strip_suffix("\n"))
+            .or(token.strip_suffix('\n'))
             .unwrap_or(token);
         match token_re.is_match(token) {
             true => {
-                tokens.push(format!("{}", token));
+                tokens.push(token.to_string());
                 continue;
             }
             false => continue,
@@ -98,7 +98,7 @@ pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
             return Ok(());
         }
     }
-    return Err(()); // Drop this undesirable traffic.
+    Err(()) // Drop this undesirable traffic.
 }
 
 pub async fn check_deny_list_host(traffic: &mut Traffic) -> Result<(), ()> {
@@ -108,7 +108,7 @@ pub async fn check_deny_list_host(traffic: &mut Traffic) -> Result<(), ()> {
             return Err(()); // Drop this undesirable traffic.
         }
     }
-    return Ok(());
+    Ok(())
 }
 
 pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
@@ -121,9 +121,9 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
                     && query_map.contains_key("client_id")
                     && query_map.contains_key("response_type")
                 {
-                    let mut auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
+                    let auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
                     tokio::spawn(async move {
-                        crate::service::proxy::store_auth(&mut auth).await;
+                        crate::service::proxy::store_auth(&auth).await;
                     });
                 }
             }
@@ -131,7 +131,7 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
             return Err(()); // This traffic is not intended for traffic collection.
         }
     }
-    return Ok(()); // This is not an identity provider, we can proceed.
+    Ok(()) // This is not an identity provider, we can proceed.
 }
 
 // Parsing strings from bodies.
@@ -140,11 +140,11 @@ pub async fn parse_utf8_request(traffic: &mut Traffic) -> Result<(), ()> {
     match std::str::from_utf8(&traffic.request_body) {
         Ok(request_body_string) => {
             traffic.request_body_string = Some(request_body_string.to_string().clone());
-            return Ok(());
+            Ok(())
         }
         Err(_e) => {
             traffic.request_body_string = None;
-            return Ok(());
+            Ok(())
         }
     }
 }
@@ -153,11 +153,11 @@ pub async fn parse_utf8_response(traffic: &mut Traffic) -> Result<(), ()> {
     match std::str::from_utf8(&traffic.response_body) {
         Ok(response_body_string) => {
             traffic.response_body_string = Some(response_body_string.to_string().clone());
-            return Ok(());
+            Ok(())
         }
         Err(_e) => {
             traffic.response_body_string = None;
-            return Ok(());
+            Ok(())
         }
     }
 }
@@ -168,7 +168,7 @@ pub async fn decompress_gzip(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers.contains_key("content-encoding")) {
         return Ok(());
     }
-    if !(traffic.response_headers["content-encoding"] == "gzip".to_string()) {
+    if traffic.response_headers["content-encoding"] != *"gzip" {
         return Ok(());
     }
     let encoded_body = traffic.response_body.clone();
@@ -184,7 +184,7 @@ pub async fn decompress_deflate(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers.contains_key("content-encoding")) {
         return Ok(());
     }
-    if !(traffic.response_headers["content-encoding"] == "deflate".to_string()) {
+    if traffic.response_headers["content-encoding"] != *"deflate" {
         return Ok(());
     }
     let encoded_body = traffic.response_body.clone();
@@ -200,7 +200,7 @@ pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
     if !(traffic.response_headers.contains_key("content-encoding")) {
         return Ok(());
     }
-    if !(traffic.response_headers["content_encoding"] == "br".to_string()) {
+    if traffic.response_headers["content_encoding"] != *"br" {
         return Ok(());
     }
     let encoded_body = traffic.response_body.clone();
