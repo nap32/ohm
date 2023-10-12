@@ -30,7 +30,7 @@ openssl req -x509 -new -nodes -key ohm.key -sha256 -days 1825 -out ohm.pem
 Run a docker image.
 
 ```
-docker pull image mongo
+docker pull mongo
 docker run --name mongo -d -p 127.0.0.1:27017:27017 mongo
 ```
 

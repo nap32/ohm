@@ -2,11 +2,9 @@
 use crate::Traffic;
 use crate::CONFIG;
 
-use flate2::{read::DeflateDecoder, read::GzDecoder};
 use futures::future::BoxFuture;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::io::{Read, Write};
 
 // Defining the type that a filtering function takes.
 type FilterFunction = fn(&mut Traffic) -> BoxFuture<'_, Result<(), ()>>;
@@ -31,11 +29,6 @@ impl Filter {
                 |traffic| Box::pin(check_identity_providers(traffic)),
                 |traffic| Box::pin(check_allow_list_host(traffic)),
                 |traffic| Box::pin(check_deny_list_host(traffic)),
-                |traffic| Box::pin(decompress_gzip(traffic)),
-                |traffic| Box::pin(decompress_deflate(traffic)),
-                |traffic| Box::pin(decompress_br(traffic)),
-                |traffic| Box::pin(parse_utf8_request(traffic)),
-                |traffic| Box::pin(parse_utf8_response(traffic)),
             ],
         }
     }
@@ -94,7 +87,7 @@ pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
         return Ok(()); // If you don't have any entries on the allow list pass everything.
     }
     for allowed_host in &config.filter.allow_list_hosts {
-        if traffic.host.contains(allowed_host) {
+        if traffic.request.host.contains(allowed_host) {
             return Ok(());
         }
     }
@@ -104,7 +97,7 @@ pub async fn check_allow_list_host(traffic: &mut Traffic) -> Result<(), ()> {
 pub async fn check_deny_list_host(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("Config is not intialized, somehow...");
     for denied_host in &config.filter.deny_list_hosts {
-        if traffic.host.contains(denied_host) {
+        if traffic.request.host.contains(denied_host) {
             return Err(()); // Drop this undesirable traffic.
         }
     }
@@ -114,17 +107,17 @@ pub async fn check_deny_list_host(traffic: &mut Traffic) -> Result<(), ()> {
 pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
     let config = CONFIG.get().expect("");
     for idp in &config.filter.identity_providers {
-        if traffic.host.contains(idp) {
+        if traffic.request.host.contains(idp) {
             {
-                let query_map = traffic.get_query_map();
-                if query_map.contains_key("redirect_uri")
-                    && query_map.contains_key("client_id")
-                    && query_map.contains_key("response_type")
+                if traffic.request.query.contains_key("redirect_uri")
+                    && traffic.request.query.contains_key("client_id")
+                    && traffic.request.query.contains_key("response_type")
                 {
-                    let auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
-                    tokio::spawn(async move {
-                        crate::service::proxy::store_auth(&auth).await;
-                    });
+                    // TODO -- Rewrite.
+                    //let auth = crate::model::auth::AuthInfo::new(&mut traffic.clone());
+                    //tokio::spawn(async move {
+                    //    crate::service::proxy::store_auth(&auth).await;
+                    //});
                 }
             }
 
@@ -132,85 +125,6 @@ pub async fn check_identity_providers(traffic: &mut Traffic) -> Result<(), ()> {
         }
     }
     Ok(()) // This is not an identity provider, we can proceed.
-}
-
-// Parsing strings from bodies.
-
-pub async fn parse_utf8_request(traffic: &mut Traffic) -> Result<(), ()> {
-    match std::str::from_utf8(&traffic.request_body) {
-        Ok(request_body_string) => {
-            traffic.request_body_string = Some(request_body_string.to_string().clone());
-            Ok(())
-        }
-        Err(_e) => {
-            traffic.request_body_string = None;
-            Ok(())
-        }
-    }
-}
-
-pub async fn parse_utf8_response(traffic: &mut Traffic) -> Result<(), ()> {
-    match std::str::from_utf8(&traffic.response_body) {
-        Ok(response_body_string) => {
-            traffic.response_body_string = Some(response_body_string.to_string().clone());
-            Ok(())
-        }
-        Err(_e) => {
-            traffic.response_body_string = None;
-            Ok(())
-        }
-    }
-}
-
-// gzip, br, deflate only.
-
-pub async fn decompress_gzip(traffic: &mut Traffic) -> Result<(), ()> {
-    if !(traffic.response_headers.contains_key("content-encoding")) {
-        return Ok(());
-    }
-    if traffic.response_headers["content-encoding"] != *"gzip" {
-        return Ok(());
-    }
-    let encoded_body = traffic.response_body.clone();
-    let mut decoded_buffer = Vec::new();
-    let mut gz = GzDecoder::new(&encoded_body[..]);
-    gz.read_to_end(&mut decoded_buffer).unwrap();
-    traffic.response_body = decoded_buffer.clone();
-    traffic.response_headers.remove("content-encoding");
-    Ok(())
-}
-
-pub async fn decompress_deflate(traffic: &mut Traffic) -> Result<(), ()> {
-    if !(traffic.response_headers.contains_key("content-encoding")) {
-        return Ok(());
-    }
-    if traffic.response_headers["content-encoding"] != *"deflate" {
-        return Ok(());
-    }
-    let encoded_body = traffic.response_body.clone();
-    let mut decoded_buffer = Vec::new();
-    let mut deflate = DeflateDecoder::new(&encoded_body[..]);
-    deflate.read_to_end(&mut decoded_buffer).unwrap();
-    traffic.response_body = decoded_buffer.clone();
-    traffic.response_headers.remove("content-encoding");
-    Ok(())
-}
-
-pub async fn decompress_br(traffic: &mut Traffic) -> Result<(), ()> {
-    if !(traffic.response_headers.contains_key("content-encoding")) {
-        return Ok(());
-    }
-    if traffic.response_headers["content_encoding"] != *"br" {
-        return Ok(());
-    }
-    let encoded_body = traffic.response_body.clone();
-    let mut decoded_buffer = Vec::new();
-    let mut brotli = brotli::DecompressorWriter::new(&mut decoded_buffer[..], 4096);
-    brotli.write_all(&encoded_body[..]).unwrap();
-    brotli.into_inner().unwrap();
-    traffic.response_body = decoded_buffer.clone();
-    traffic.response_headers.remove("content-encoding");
-    Ok(())
 }
 
 #[cfg(test)]

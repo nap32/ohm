@@ -18,6 +18,10 @@ use http::uri::{Authority, Scheme};
 use hyper_tls::HttpsConnector;
 use tokio_rustls::TlsAcceptor;
 
+use std::collections::HashMap;
+use flate2::read::{DeflateDecoder, GzDecoder};
+use std::io::{Read, Write};
+
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -145,6 +149,7 @@ pub async fn process_traffic(traffic: &mut Traffic) {
     let filter_chain = FILTER_CHAIN
         .get()
         .expect("Traffic filtering chain not intialized.");
+    println!("{:?}", traffic);
     if (filter_chain.filter(traffic).await).is_ok() {
         store_traffic(traffic).await
     }
@@ -172,61 +177,166 @@ pub async fn store_auth(auth: &AuthInfo) {
     }
 }
 
-// TODO: Implement .Copy() for hyper::traffic or find a better way.
-// "parts.extensions" is not cloned because it doesn't implement the trait and is left out here.
-
 pub async fn clone_request(
     request: Request<Body>,
-) -> Result<(Request<Body>, Request<Body>), Error> {
+) -> Result<(hyper::Request<Body>, crate::model::traffic::Request), Error> {
     let (parts, body) = request.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
 
-    let mut req1 = Request::builder()
+    let mut hyper_request = Request::builder()
         .uri(parts.uri.clone())
         .method(parts.method.clone())
         .version(parts.version);
     {
-        let headers = req1.headers_mut().unwrap();
+        let headers = hyper_request.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
-    let req1 = req1.body(Body::from(body_bytes.clone()))?;
+    let hyper_request = hyper_request.body(Body::from(body_bytes.clone()))?;
 
-    let mut req2 = Request::builder()
-        .uri(parts.uri.clone())
-        .method(parts.method.clone())
-        .version(parts.version);
-    {
-        let headers = req2.headers_mut().unwrap();
-        headers.extend(parts.headers.clone());
-    }
-    let req2 = req2.body(Body::from(body_bytes.clone()))?;
+    let body = parse_body(body_bytes, parts.headers.get("Content-Encoding")).await;
+    let traffic_request = crate::model::traffic::Request::new(
+        parts.method.to_string(),
+        parts.uri.scheme_str().unwrap_or_else(|| "").to_string(),
+        parts.uri.host().unwrap_or_else(|| "").to_string(),
+        parts.uri.path().to_string(),
+        parse_query(parts.uri.query().unwrap_or_else(|| "")).await,
+        parse_headers(parts.headers).await,
+        body,
+        parse_version(parts.version).await,
+    )
+    .await;
 
-    Ok((req1, req2))
+    Ok((hyper_request, traffic_request))
 }
 
 pub async fn clone_response(
     response: Response<Body>,
-) -> Result<(Response<Body>, Response<Body>), Error> {
+) -> Result<(hyper::Response<Body>, crate::model::traffic::Response), Error> {
     let (parts, body) = response.into_parts();
     let body_bytes = hyper::body::to_bytes(body).await?;
 
-    let mut res1 = Response::builder()
+    let mut hyper_response = Response::builder()
         .status(parts.status)
         .version(parts.version);
     {
-        let headers = res1.headers_mut().unwrap();
+        let headers = hyper_response.headers_mut().unwrap();
         headers.extend(parts.headers.clone());
     }
-    let res1 = res1.body(Body::from(body_bytes.clone()))?;
+    let hyper_response = hyper_response.body(Body::from(body_bytes.clone()))?;
 
-    let mut res2 = Response::builder()
-        .status(parts.status)
-        .version(parts.version);
-    {
-        let headers = res2.headers_mut().unwrap();
-        headers.extend(parts.headers.clone());
+    let body = parse_body(body_bytes, parts.headers.get("Content-Encoding")).await;
+    let traffic_response = crate::model::traffic::Response {
+        status: parts.status.into(),
+        headers: parse_headers(parts.headers).await,
+        body: body,
+        version: parse_version(parts.version).await,
+    };
+
+    Ok((hyper_response, traffic_response))
+}
+
+pub async fn parse_query(queries: &str) -> HashMap<String, String> {
+    let mut q = HashMap::<String, String>::new();
+    for pair in queries.split("&") {
+        let query: Vec<_> = pair.split("=").collect();
+        if query.len() == 2 {
+            q.insert(query[0].to_string(), query[1].to_string());
+        }
     }
-    let res2 = res2.body(Body::from(body_bytes.clone()))?;
+    q
+}
 
-    Ok((res1, res2))
+pub async fn parse_headers(headers: hyper::HeaderMap) -> HashMap<String, String> {
+    let mut h = HashMap::<String, String>::new();
+    for (key, value) in headers.iter() {
+        if let Ok(vs) = value.to_str() {
+            h.insert(key.to_string(), vs.to_string());
+        }
+    }
+    h
+}
+
+pub async fn parse_body(body_bytes: hyper::body::Bytes, encoding: Option::<&hyper::header::HeaderValue>) -> String {
+    let body_string = match std::str::from_utf8(&body_bytes) {
+        Ok(b) => b,
+        Err(_) => ""
+    };
+    match encoding {
+        Some(v) => {
+            let vs = match v.to_str() {
+                Ok(str) => str,
+                Err(_) => "",
+            };
+            let result = match vs {
+                "deflate" => decompress_deflate(body_string).await,
+                "gzip" => decompress_gzip(body_string).await,
+                "br" => decompress_gzip(body_string).await,
+                _ => body_string.to_string(),
+            };
+            result
+        },
+        None => {
+            body_string.to_string()
+        }
+    }
+}
+
+pub async fn decompress_gzip(encoded: &str) -> String {
+    let encoded_bytes = &encoded.as_bytes().to_vec();
+    let mut decoded_buffer = Vec::new();
+    let mut gz = GzDecoder::new(&encoded_bytes[..]);
+    gz.read_to_end(&mut decoded_buffer).expect("Decompressing gz failed.");
+    let result = match String::from_utf8(decoded_buffer) {
+        Ok(s) => {
+            s
+        },
+        Err(_) => {
+            encoded.to_string()
+        }
+    };
+    result
+}
+
+pub async fn decompress_deflate(encoded: &str) -> String {
+    let encoded_bytes = &encoded.as_bytes().to_vec();
+    let mut decoded_buffer = Vec::new();
+    let mut deflate = DeflateDecoder::new(&encoded_bytes[..]);
+    deflate.read_to_end(&mut decoded_buffer).expect("Decompressing deflate failed.");
+    let result = match String::from_utf8(decoded_buffer) {
+        Ok(s) => {
+            s
+        },
+        Err(_) => {
+            "".to_owned()
+        }
+    };
+    result
+}
+
+pub async fn decompress_br(encoded: &str) -> String {
+    let encoded_bytes = &encoded.as_bytes().to_vec();
+    let mut decoded_buffer = Vec::new();
+    let mut brotli = brotli::DecompressorWriter::new(&mut decoded_buffer[..], 4096);
+    brotli.write_all(&encoded_bytes[..]).unwrap();
+    brotli.into_inner().unwrap();
+    let result = match String::from_utf8(decoded_buffer) {
+        Ok(s) => {
+            s
+        },
+        Err(_) => {
+            "".to_owned()
+        }
+    };
+    result
+}
+
+pub async fn parse_version(version: http::version::Version) -> String {
+    return match version {
+        http::Version::HTTP_09 => "HTTP/0.9".to_owned(),
+        http::Version::HTTP_10 => "HTTP/1.0".to_owned(),
+        http::Version::HTTP_11 => "HTTP/1.1".to_owned(),
+        http::Version::HTTP_2 => "HTTP/2.0".to_owned(),
+        http::Version::HTTP_3 => "HTTP/3.0".to_owned(),
+        _ => "HTTP/1.0".to_owned(),
+    };
 }
